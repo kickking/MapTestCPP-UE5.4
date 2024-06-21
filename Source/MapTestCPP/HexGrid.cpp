@@ -39,7 +39,7 @@ void AHexGrid::BeginPlay()
 	Super::BeginPlay();
 
 	WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
-	CreateHexGridFlow();
+	//CreateHexGridFlow();
 }
 
 void AHexGrid::BindDelegate()

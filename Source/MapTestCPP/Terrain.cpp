@@ -5,8 +5,9 @@
 #include "FlowControlUtility.h"
 #include "HexGrid.h"
 
-#include <FastNoiseWrapper.h>
 #include <Kismet/GameplayStatics.h>
+#include <Kismet/KismetMaterialLibrary.h>
+#include <Kismet/KismetMathLibrary.h>
 #include <Math/UnrealMathUtility.h>
 #include <TimerManager.h>
 #include <ProceduralMeshComponent.h>
@@ -21,11 +22,14 @@ ATerrain::ATerrain()
 
 	TerrainMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("TerrainMesh"));
 	this->SetRootComponent(TerrainMesh);
-
 	TerrainMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 
-	BindDelegate();
+	WaterMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("WaterMesh"));
+	WaterMesh->SetupAttachment(TerrainMesh);
+	WaterMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	WaterMesh->SetWorldLocation(FVector(0.0, 0.0, -1.0));
 
+	BindDelegate();
 
 }
 
@@ -52,23 +56,76 @@ void ATerrain::BindDelegate()
 
 void ATerrain::CreateNoise()
 {
-	NoiseWrapper = NewObject<UFastNoiseWrapper>(this);
+	NWTerrainHigh = NewObject<UFastNoiseWrapper>(this);
+	NWTerrainLow = NewObject<UFastNoiseWrapper>(this);
+	NWMoisture = NewObject<UFastNoiseWrapper>(this);
+	NWTemperature = NewObject<UFastNoiseWrapper>(this);
+	NWTree = NewObject<UFastNoiseWrapper>(this);
 
-	if (NoiseWrapper != nullptr) {
-		NoiseWrapper->SetupFastNoise(EFastNoise_NoiseType::PerlinFractal, 
-			NoiseSeed, 
-			NoiseFrequency, 
-			EFastNoise_Interp::Quintic, 
-			EFastNoise_FractalType::RigidMulti, 
-			Octaves, 
-			Lacunarity, 
-			Gain, 
-			CellularJitter, 
-			EFastNoise_CellularDistanceFunction::Euclidean, 
-			EFastNoise_CellularReturnType::CellValue);
+	if (NWTerrainHigh != nullptr && NWTerrainLow != nullptr && NWMoisture != nullptr && 
+		NWTemperature != nullptr && NWTree != nullptr) {
+		NWTerrainHigh->SetupFastNoise(NWTerrainHigh_NoiseType,
+			NWTerrainHigh_NoiseSeed,
+			NWTerrainHigh_NoiseFrequency,
+			NWTerrainHigh_Interp,
+			NWTerrainHigh_FractalType,
+			NWTerrainHigh_Octaves,
+			NWTerrainHigh_Lacunarity,
+			NWTerrainHigh_Gain,
+			NWTerrainHigh_CellularJitter,
+			NWTerrainHigh_CDF,
+			NWTerrainHigh_CRT);
+
+		NWTerrainLow->SetupFastNoise(NWTerrainLow_NoiseType,
+			NWTerrainLow_NoiseSeed,
+			NWTerrainLow_NoiseFrequency,
+			NWTerrainLow_Interp,
+			NWTerrainLow_FractalType,
+			NWTerrainLow_Octaves,
+			NWTerrainLow_Lacunarity,
+			NWTerrainLow_Gain,
+			NWTerrainLow_CellularJitter,
+			NWTerrainLow_CDF,
+			NWTerrainLow_CRT);
+
+		NWMoisture->SetupFastNoise(NWMoisture_NoiseType,
+			NWMoisture_NoiseSeed,
+			NWMoisture_NoiseFrequency,
+			NWMoisture_Interp,
+			NWMoisture_FractalType,
+			NWMoisture_Octaves,
+			NWMoisture_Lacunarity,
+			NWMoisture_Gain,
+			NWMoisture_CellularJitter,
+			NWMoisture_CDF,
+			NWMoisture_CRT);
+
+		NWTemperature->SetupFastNoise(NWTemperature_NoiseType,
+			NWTemperature_NoiseSeed,
+			NWTemperature_NoiseFrequency,
+			NWTemperature_Interp,
+			NWTemperature_FractalType,
+			NWTemperature_Octaves,
+			NWTemperature_Lacunarity,
+			NWTemperature_Gain,
+			NWTemperature_CellularJitter,
+			NWTemperature_CDF,
+			NWTemperature_CRT);
+
+		NWTree->SetupFastNoise(NWTree_NoiseType,
+			NWTree_NoiseSeed,
+			NWTree_NoiseFrequency,
+			NWTree_Interp,
+			NWTree_FractalType,
+			NWTree_Octaves,
+			NWTree_Lacunarity,
+			NWTree_Gain,
+			NWTree_CellularJitter,
+			NWTree_CDF,
+			NWTree_CRT);
 
 		CreateNoiseDone = true;
-		UE_LOG(Terrain, Log, TEXT("Create and set NoiseWrapper."));
+		UE_LOG(Terrain, Log, TEXT("Create and set Noise."));
 	}
 }
 
@@ -81,6 +138,41 @@ void ATerrain::InitTileParameter()
 {
 	TileSizeMultiplier = TileSize * TileScale;
 	TileHeightMultiplier = TileHeight * TileScale;
+}
+
+void ATerrain::InitReceiveDecal()
+{
+	TerrainMesh->SetReceivesDecals(true);
+	WaterMesh->SetReceivesDecals(false);
+}
+
+void ATerrain::InitMountainParam()
+{
+	MountainBaseA = FMath::Clamp<float>(MountainBase, 0.0, 1.0);
+	MountainBaseA = MountainBaseA > 0.0 ? MountainBaseA : 0.5;
+	OneMinMB = 1 - MountainBaseA;
+	OneMinMB = OneMinMB > 0.0 ? OneMinMB : 0.5;
+}
+
+void ATerrain::InitWaterParam()
+{
+	LandADVByWaterLvA = FMath::Lerp(2.7, 2.0, WaterLevel);
+	LandADVByWaterLvB = FMath::Lerp(2.2, 1.7, WaterLevel);
+}
+
+void ATerrain::InitARCal()
+{
+	ARL_Acc = 0.0;
+	ARL_Count = 0;
+	ARL_Lowest = 0.0;
+	ARL_Avg = 0.0;
+}
+
+void ATerrain::InitTreeParam()
+{
+	TreeAreaScaleA = FMath::Pow(TreeAreaScale, 0.2);
+	TreeAreaScaleA = TreeAreaScaleA > 0.0 ? TreeAreaScaleA : 1.0;
+	OneMinTAS = 1.0 - TreeAreaScaleA;
 }
 
 void ATerrain::InitLoopData()
@@ -108,18 +200,38 @@ void ATerrain::InitHexGrid()
 	}
 }
 
+bool ATerrain::CheckMaterialSetting()
+{
+	bool ret = false;
+	if (TerrainMaterialIns != nullptr && TerrainMPC != nullptr && WaterMaterialIns != nullptr && 
+		CausticsMaterialIns != nullptr) {
+		ret = true;
+	}
+	return ret;
+}
+
 void ATerrain::InitWorkflow()
 {
 	CreateNoise();
 	InitTileParameter();
+	InitReceiveDecal();
 	InitLoopData();
 	InitHexGrid();
+	InitMountainParam();
+	InitWaterParam();
+	InitARCal();
+	InitTreeParam();
 
 	FTimerHandle TimerHandle;
-	WorkflowState = Enum_TerrainWorkflowState::CreateVerticesAndUVs;
+	if (CheckMaterialSetting()) {
+		WorkflowState = Enum_TerrainWorkflowState::CreateVerticesAndUVs;
+		UE_LOG(Terrain, Log, TEXT("Init workflow done!"));
+	}
+	else {
+		WorkflowState = Enum_TerrainWorkflowState::Error;
+		UE_LOG(Terrain, Log, TEXT("CheckMaterialSetting() error!"));
+	}
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
-	UE_LOG(Terrain, Log, TEXT("Init workflow done!"));
-
 }
 
 //bind to delegate
@@ -141,11 +253,13 @@ void ATerrain::CreateTerrainFlow()
 	case Enum_TerrainWorkflowState::NormalizeNormals:
 		CreateNormals();
 		break;
-	case Enum_TerrainWorkflowState::DrawMesh:
+	case Enum_TerrainWorkflowState::DrawLandMesh:
 		CreateTerrainMesh();
 		SetTerrainMaterial();
+		WorkflowState = Enum_TerrainWorkflowState::CreateWater;
+	case Enum_TerrainWorkflowState::CreateWater:
+		CreateWater();
 		WorkflowState = Enum_TerrainWorkflowState::Done;
-		break;
 	case Enum_TerrainWorkflowState::Done:
 		break;
 	case Enum_TerrainWorkflowState::Error:
@@ -185,6 +299,9 @@ void ATerrain::CreateVertices()
 	TArray<int32> Indices = {0, 0};
 	bool SaveLoopFlag = false;
 
+	float RatioStd = 0;
+	float Ratio= 0;
+
 	if (!CreateVerticesLoopData.IsInitialized) {
 		CreateVerticesLoopData.IsInitialized = true;
 		ProgressTarget = (NumRows + 1) * (NumColumns + 1);
@@ -203,8 +320,13 @@ void ATerrain::CreateVertices()
 			if (SaveLoopFlag) {
 				return;
 			}
-			CreateVertex(X, Y);
+			
+			CreateVertex(X, Y, RatioStd, Ratio);
 			CreateUV(X, Y);
+			CreateVertexColorsForAMT(RatioStd, X, Y);
+			CalRatioBelowZero(Ratio);
+			AddTreeValues(X, Y);
+
 			ProgressCurrent = CreateVerticesLoopData.Count;
 			Count++;
 		}
@@ -212,18 +334,22 @@ void ATerrain::CreateVertices()
 	}
 	ResetProgress();
 
+	ARL_Avg = ARL_Acc / ARL_Count;
+	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("AltitudeOffset"),
+		ARL_Avg * HighLandLevel);
+
 	WorkflowState = Enum_TerrainWorkflowState::CreateTriangles;
 	FTimerHandle TimerHandle;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, CreateVerticesLoopData.Rate, false);
 	UE_LOG(Terrain, Log, TEXT("Create vertices and UVs done."));
 }
 
-float ATerrain::GetAltitude(UFastNoiseWrapper* NoiseWP, float X, float Y, float InHorizon, float Multiplier)
+float ATerrain::GetAltitude(UFastNoiseWrapper* NoiseWP, float X, float Y, float base, float Multiplier)
 {
 	float Value = 0.0;
 	if (NoiseWP != nullptr) {
 		Value = NoiseWP->GetNoise2D(X, Y);
-		float H = FMath::Clamp<float>(InHorizon, 0.0, 1.0);
+		float H = FMath::Clamp<float>(base, 0.0, 1.0);
 		Value = (Value + 1.0) * 0.5 - H;
 		Value = FMath::Clamp<float>(Value, 0.0, 1.0) * Multiplier / (1.0 - H);
 
@@ -231,19 +357,54 @@ float ATerrain::GetAltitude(UFastNoiseWrapper* NoiseWP, float X, float Y, float 
 	return Value;
 }
 
+float ATerrain::GetAltitudePlus(float X, float Y, float& OutRatioStd, float& OutRatio)
+{
+	float valueH = GetNoise2DStd(NWTerrainHigh, X, Y, 1.0);
+	float valueL = GetNoise2DStd(NWTerrainLow, X, Y, 1.0);
+	float value = FMath::Lerp(valueL, valueH, valueH);
+	float h = value - MountainBaseA;
+	float exp = 1.0;
+	if (h > 0) {
+		h = h / OneMinMB;
+		exp = FMath::Lerp(1.2, 1.0, h);
+		h = FMath::Pow(h, exp);
+	}else {
+		h = -h / MountainBaseA;
+		exp = FMath::Lerp(LandADVByWaterLvA, LandADVByWaterLvB, h);
+		h = FMath::Pow(h, exp);
+		h = -h;
+	}
+	value = TileHeightMultiplier * h;
+	OutRatio = h;
+	OutRatioStd = h * 0.5 + 0.5;
+	return value;
+}
+
+float ATerrain::GetNoise2DStd(UFastNoiseWrapper* NWP, float X, float Y, float scale)
+{
+	float value = 0.0;
+	if (NWP != nullptr) {
+		value = NWP->GetNoise2D(X, Y);
+		value = FMath::Clamp<float>(value * scale, -1.0, 1.0);
+		value = (value + 1) * 0.5;
+	}
+	return value;
+}
+
 float ATerrain::GetAltitudeByPos2D(const FVector2D Pos2D, AActor* Caller)
 {
 	float X = Pos2D.X / TileSizeMultiplier;
 	float Y = Pos2D.Y / TileSizeMultiplier;
-	float Z = GetAltitude(NoiseWrapper, X, Y, Horizon, TileHeightMultiplier);
+	float Z = GetAltitude(NWTerrainHigh, X, Y, MountainBase, TileHeightMultiplier);
 	return Z;
 }
 
-void ATerrain::CreateVertex(float X, float Y)
+void ATerrain::CreateVertex(float X, float Y, float& OutRatioStd, float& OutRatio)
 {
 	float VX = X * TileSizeMultiplier;
 	float VY = Y * TileSizeMultiplier;
-	float VZ = GetAltitude(NoiseWrapper, X, Y, Horizon, TileHeightMultiplier);
+	//float VZ = GetAltitude(NWTerrainHigh, X, Y, MountainBase, TileHeightMultiplier);
+	float VZ = GetAltitudePlus(X, Y, OutRatioStd, OutRatio);
 	Vertices.Add(FVector(VX, VY, VZ));
 }
 
@@ -252,6 +413,33 @@ void ATerrain::CreateUV(float X, float Y)
 	float UVx = X * UVScale;
 	float UVy = Y * UVScale;
 	UVs.Add(FVector2D(UVx, UVy));
+}
+
+//Create vertex Color(R:Altidude G:Moisture B:Temperature)
+void ATerrain::CreateVertexColorsForAMT(float RatioStd, float X, float Y)
+{
+	float Moisture = GetNoise2DStd(NWMoisture, X, Y, 3.0);
+	float Temperature = GetNoise2DStd(NWTemperature, X, Y, 3.0);
+	VertexColors.Add(FLinearColor(RatioStd, Moisture, Temperature, 0.0));
+}
+
+void ATerrain::CalRatioBelowZero(float Ratio)
+{
+	if (Ratio < 0) {
+		ARL_Acc += Ratio;
+		ARL_Count++;
+		if (Ratio < ARL_Lowest) {
+			ARL_Lowest = Ratio;
+		}
+	}
+}
+
+void ATerrain::AddTreeValues(float X, float Y)
+{
+	float value = NWTree->GetNoise2D(X, Y);
+	value = (value - OneMinTAS) / TreeAreaScaleA;
+	value = FMath::Clamp<float>(value, 0.0, 1.0);
+	TreeValues.Add(value);
 }
 
 void ATerrain::CreateTriangles()
@@ -448,7 +636,7 @@ void ATerrain::NormalizeNormals()
 	}
 	ResetProgress();
 
-	WorkflowState = Enum_TerrainWorkflowState::DrawMesh;
+	WorkflowState = Enum_TerrainWorkflowState::DrawLandMesh;
 	FTimerHandle TimerHandle;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, NormalizeNormalsLoopData.Rate, false);
 	UE_LOG(Terrain, Log, TEXT("Normalize normals done."));
@@ -456,7 +644,8 @@ void ATerrain::NormalizeNormals()
 
 void ATerrain::CreateTerrainMesh()
 {
-	TerrainMesh->CreateMeshSection(0, Vertices, Triangles, Normals, UVs, TArray<FColor>(), TArray<FProcMeshTangent>(), true );
+	TerrainMesh->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, VertexColors, 
+		TArray<FProcMeshTangent>(), true );
 	TerrainMesh->bUseComplexAsSimpleCollision = true;
 	TerrainMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 	TerrainMesh->SetCollisionObjectType(ECollisionChannel::ECC_WorldStatic);
@@ -466,5 +655,112 @@ void ATerrain::CreateTerrainMesh()
 void ATerrain::SetTerrainMaterial()
 {
 	TerrainMesh->SetMaterial(0, TerrainMaterialIns);
+}
+
+void ATerrain::CreateWater()
+{
+	SetWaterZ();
+	if (WaterLevel > 0.0) {
+		CreateWaterPlane();
+		CreateCaustics();
+	}
+}
+
+void ATerrain::SetWaterZ()
+{
+	WaterZRatio = (ARL_Avg - ARL_Lowest) * WaterLevel + ARL_Lowest;
+	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("WaterZRatio"),
+		WaterZRatio);
+}
+
+void ATerrain::CreateWaterPlane()
+{
+	CreateWaterVerticesAndUVs();
+	CreateWaterTriangles();
+	CreateWaterNormals();
+	CreateWaterMesh();
+	SetWaterMaterial();
+}
+
+void ATerrain::CreateWaterVerticesAndUVs()
+{
+	float HalfRow = TileSizeMultiplier * NumRows / 2.0;
+	float RowLen = TileSizeMultiplier * NumRows / WaterNumRows;
+
+	float HalfColumn = TileSizeMultiplier * NumColumns / 2.0;
+	float ColLen = TileSizeMultiplier * NumColumns / WaterNumColumns;
+
+	WaterPlaneZ = WaterZRatio * TileHeightMultiplier - WaterMesh->GetComponentLocation().Z;
+	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("WaterBase"),
+		WaterPlaneZ);
+
+	float UVRow = UVScale / WaterNumRows;
+	float UVColumn = UVScale / WaterNumColumns;
+
+	int32 i;
+	int32 j;
+	for (i = 0; i <= WaterNumRows; i++) {
+		for (j = 0; j <= WaterNumColumns; j++) {
+			WaterVertices.Add(FVector(RowLen * i - HalfRow, ColLen * j - HalfColumn, WaterPlaneZ));
+			WaterUVs.Add(FVector2D(UVRow * i - 0.5, UVColumn * j - 0.5));
+		}
+	}
+}
+
+void ATerrain::CreateWaterTriangles()
+{
+	int32 ColumnVertexNum = WaterNumColumns + 1;
+	int32 RowMinOne = WaterNumRows - 1;
+	int32 ColumnMinOne = WaterNumColumns - 1;
+
+	int32 i;
+	int32 j;
+
+	int32 RowVertex;
+	int32 RowPlusOneVertex;
+
+	for (i = 0; i <= RowMinOne; i++) {
+		RowVertex = i * ColumnVertexNum;
+		RowPlusOneVertex = (i + 1) * ColumnVertexNum;
+		for (j = 0; j <= ColumnMinOne; j++) {
+			WaterTriangles.Add(j + RowVertex);
+			WaterTriangles.Add(j + 1 + RowPlusOneVertex);
+			WaterTriangles.Add(j + RowPlusOneVertex);
+			WaterTriangles.Add(j + RowVertex);
+			WaterTriangles.Add(j + 1 + RowVertex);
+			WaterTriangles.Add(j + 1 + RowPlusOneVertex);
+		}
+	}
+}
+
+void ATerrain::CreateWaterNormals()
+{
+	int32 i;
+	for (i = 0; i <= WaterVertices.Num() - 1; i++) {
+		WaterNormals.Add(FVector(0, 0, 1.0));
+	}
+}
+
+void ATerrain::CreateWaterMesh()
+{
+	WaterMesh->CreateMeshSection_LinearColor(0, WaterVertices, WaterTriangles, WaterNormals, WaterUVs, 
+		TArray<FLinearColor>(), TArray<FProcMeshTangent>(), true);
+}
+
+void ATerrain::SetWaterMaterial()
+{
+	WaterMesh->SetMaterial(0, WaterMaterialIns);
+}
+
+void ATerrain::CreateCaustics()
+{
+	float base = UKismetMaterialLibrary::GetScalarParameterValue(this, TerrainMPC, TEXT("WaterBase"));
+	float z = (base - ARL_Lowest * TileHeightMultiplier) / 2.0;
+	FVector size = UKismetMathLibrary::MakeVector(TileSizeMultiplier * NumRows, TileSizeMultiplier * NumColumns,
+		z);
+	FVector location = UKismetMathLibrary::MakeVector(0, 0, base - z);
+
+	UGameplayStatics::SpawnDecalAtLocation(this, CausticsMaterialIns, size, location);
+
 }
 
