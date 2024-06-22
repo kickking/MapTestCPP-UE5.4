@@ -71,122 +71,126 @@ private:
 protected:
 	//Mesh
 	UPROPERTY(BlueprintReadOnly)
-		class UProceduralMeshComponent* HexGridMesh;
+	class UProceduralMeshComponent* HexGridMesh;
 	UPROPERTY(BlueprintReadOnly)
-		class UProceduralMeshComponent* MouseOverMesh;
+	class UProceduralMeshComponent* MouseOverMesh;
 
 	//Material
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Material")
-		class UMaterialInstance* HexGridLineMaterialIns;
+	class UMaterialInstance* HexGridLineMaterialIns;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Material")
-		class UMaterialInstance* HexGridLineVCMaterialIns;
+	class UMaterialInstance* HexGridLineVCMaterialIns;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Material")
-		class UMaterialInstance* MouseOverMaterialIns;
+	class UMaterialInstance* MouseOverMaterialIns;
 
 	//Vetex Colors
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|VextexColors")
-		bool bUseLineVextexColors = false;
+	bool bUseBlockVextexColors = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|VextexColors")
-		FLinearColor LineVertexColor;
+	FLinearColor LineVertexColor;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|VextexColors")
-		Enum_BlockMode VertexColorsShowMode = Enum_BlockMode::LowBlock;
+	Enum_BlockMode VertexColorsShowMode = Enum_BlockMode::LowBlock;
 
 	//Timer
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Timer")
-		float DefaultTimerRate = 0.01f;
+	float DefaultTimerRate = 0.01f;
 
 	//Path
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-		FString ParamsDataPath = FString(TEXT("Data/Params.data"));
+	FString ParamsDataPath = FString(TEXT("Data/Params.data"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-		FString TilesDataPath = FString(TEXT("Data/Tiles.data"));
+	FString TilesDataPath = FString(TEXT("Data/Tiles.data"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-		FString TileIndicesDataPath = FString(TEXT("Data/TileIndices.data"));
+	FString TileIndicesDataPath = FString(TEXT("Data/TileIndices.data"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-		FString VerticesDataPath = FString(TEXT("Data/Vertices.data"));
+	FString VerticesDataPath = FString(TEXT("Data/Vertices.data"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-		FString TrianglesDataPath = FString(TEXT("Data/Triangles.data"));
+	FString TrianglesDataPath = FString(TEXT("Data/Triangles.data"));
 
 	//Altitude
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Altitude")
-		bool bFitAltitude = false;
+	bool bFitAltitude = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Altitude")
-		float AltitudeOffset = 100.0f;
+	float AltitudeOffset = 100.0f;
 
 	//Loop BP
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData LoadTilesLoopData;
+	FStructLoopData LoadTilesLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData LoadTileIndicesLoopData;
+	FStructLoopData LoadTileIndicesLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData LoadVerticesLoopData;
+	FStructLoopData LoadVerticesLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData LoadTrianglesLoopData;
+	FStructLoopData LoadTrianglesLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData SetTilesPosZLoopData;
+	FStructLoopData SetTilesPosZLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData SetVerticesPosZLoopData;
+	FStructLoopData SetVerticesPosZLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData SetTerrainLowBlockLevelLoopData;
+	FStructLoopData SetTerrainLowBlockLevelLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-		FStructLoopData SetVertexColorsLoopData;
+	FStructLoopData SetVertexColorsLoopData;
 
 	//Load from data file
 	UPROPERTY(BlueprintReadOnly)
-		TArray<FStructHexTileData> Tiles;
+	TArray<FStructHexTileData> Tiles;
 	UPROPERTY(BlueprintReadOnly)
-		TMap<FIntPoint, int32> TileIndices;
+	TMap<FIntPoint, int32> TileIndices;
 
 	//Render variables (Load from data file)
 	UPROPERTY(BlueprintReadOnly)
-		TArray<FVector> LineVertices;
+	TArray<FVector> GridVertices;
 	UPROPERTY(BlueprintReadOnly)
-		TArray<int32> LineTriangles;
+	TArray<int32> GridTriangles;
 	UPROPERTY(BlueprintReadOnly)
-		TArray<FLinearColor> LineVertexColors;
+	TArray<FLinearColor> GridVertexColors;
 
 	UPROPERTY(BlueprintReadOnly)
-		TArray<FVector> MouseOverVertices;
+	TArray<FVector> MouseOverVertices;
 	UPROPERTY(BlueprintReadOnly)
-		TArray<int32> MouseOverTriangles;
+	TArray<int32> MouseOverTriangles;
 
 	//Workflow
 	UPROPERTY(BlueprintReadOnly)
-		Enum_HexGridWorkflowState WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
+	Enum_HexGridWorkflowState WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
 
 	//Progress
 	UPROPERTY(BlueprintReadOnly)
-		int32 ProgressTarget = 0;
+	int32 ProgressTarget = 0;
 	UPROPERTY(BlueprintReadOnly)
-		int32 ProgressCurrent = 0;
+	int32 ProgressCurrent = 0;
+
+	//common
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Common")
+	bool bShowGrid = false;
 
 	//Params
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Params")
-		int32 ParamNum = 4;
+	int32 ParamNum = 4;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-		float TileSize = 0.0f;
+	float TileSize = 0.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-		int32 GridRange = 10;
+	int32 GridRange = 10;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-		float GridLineRatio = 0.1f;
+	float GridLineRatio = 0.1f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-		int32 NeighborRange = 10;
+	int32 NeighborRange = 10;
 
 	//MouseOver
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|MouseOver", meta = (ClampMin = "0"))
-		int32 MouseOverShowRadius = 1;
+	int32 MouseOverShowRadius = 1;
 
 	//Block
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block")
-		float TerrainLowBlockPosZ = 0.0;
+	float TerrainLowBlockPosZ = 0.0;
 	
 public:	
 	// Sets default values for this actor's properties

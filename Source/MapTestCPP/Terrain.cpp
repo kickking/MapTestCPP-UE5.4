@@ -299,8 +299,8 @@ void ATerrain::CreateVertices()
 	TArray<int32> Indices = {0, 0};
 	bool SaveLoopFlag = false;
 
-	float RatioStd = 0;
-	float Ratio= 0;
+	float RatioStd;
+	float Ratio;
 
 	if (!CreateVerticesLoopData.IsInitialized) {
 		CreateVerticesLoopData.IsInitialized = true;
@@ -395,7 +395,10 @@ float ATerrain::GetAltitudeByPos2D(const FVector2D Pos2D, AActor* Caller)
 {
 	float X = Pos2D.X / TileSizeMultiplier;
 	float Y = Pos2D.Y / TileSizeMultiplier;
-	float Z = GetAltitude(NWTerrainHigh, X, Y, MountainBase, TileHeightMultiplier);
+	//float Z = GetAltitude(NWTerrainHigh, X, Y, MountainBase, TileHeightMultiplier);
+	float Out_RatioStd;
+	float Out_Ratio;
+	float Z = GetAltitudePlus(X, Y, Out_RatioStd, Out_Ratio);
 	return Z;
 }
 

@@ -39,7 +39,7 @@ void AHexGrid::BeginPlay()
 	Super::BeginPlay();
 
 	WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
-	//CreateHexGridFlow();
+	CreateHexGridFlow();
 }
 
 void AHexGrid::BindDelegate()
@@ -88,7 +88,6 @@ void AHexGrid::CreateHexGridFlow()
 		CreateHexGridLineMesh();
 		SetHexGridLineMaterial();
 		WorkflowState = Enum_HexGridWorkflowState::Done;
-		break;
 	case Enum_HexGridWorkflowState::Done:
 		break;
 	case Enum_HexGridWorkflowState::Error:
@@ -124,10 +123,10 @@ void AHexGrid::InitLoopData()
 void AHexGrid::WaitTerrainNoise()
 {
 	FTimerHandle TimerHandle;
-	TArray<AActor*> OutActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATerrain::StaticClass(), OutActors);
-	if (OutActors.Num() == 1) {
-		Terrain = (ATerrain*)OutActors[0];
+	TArray<AActor*> Out_Actors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATerrain::StaticClass(), Out_Actors);
+	if (Out_Actors.Num() == 1) {
+		Terrain = (ATerrain*)Out_Actors[0];
 		if (Terrain->isCreateNoiseDone()) {
 			WorkflowState = Enum_HexGridWorkflowState::LoadParams;
 			GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
@@ -429,7 +428,7 @@ void AHexGrid::ParseVerticesLine(const FString& line)
 	{
 		FVector Vec;
 		ParseVector(StrArr[i], Vec);
-		LineVertices.Add(Vec);
+		GridVertices.Add(Vec);
 	}
 }
 
@@ -493,7 +492,7 @@ void AHexGrid::ParseTrianglesLine(const FString& line)
 	{
 		int32 Value;
 		ParseInt(StrArr[i], Value);
-		LineTriangles.Add(Value);
+		GridTriangles.Add(Value);
 	}
 }
 
@@ -572,7 +571,7 @@ void AHexGrid::SetVerticesPosZ()
 	bool SaveLoopFlag = false;
 
 	int32 i = SetVerticesPosZLoopData.IndexSaved[0];
-	for ( ; i < LineVertices.Num(); i++)
+	for ( ; i < GridVertices.Num(); i++)
 	{
 		Indices[0] = i;
 		FlowControlUtility::SaveLoopData(this, SetVerticesPosZLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
@@ -580,7 +579,7 @@ void AHexGrid::SetVerticesPosZ()
 			return;
 		}
 
-		SetVertexPosZ(LineVertices[i]);
+		SetVertexPosZ(GridVertices[i]);
 		Count++;
 	}
 	WorkflowState = Enum_HexGridWorkflowState::SetTerrainLowBlockLevel;
@@ -657,7 +656,7 @@ void AHexGrid::SetLowBlockLevelByNeighbors(FStructHexTileData& Data, int32 Index
 void AHexGrid::SetVertexColors()
 {
 	FTimerHandle TimerHandle;
-	if (!bUseLineVextexColors) {
+	if (!bUseBlockVextexColors) {
 		UE_LOG(HexGrid, Log, TEXT("Do not use vertex colors!"));
 		WorkflowState = Enum_HexGridWorkflowState::DrawMesh;
 		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, SetVertexColorsLoopData.Rate, false);
@@ -669,7 +668,7 @@ void AHexGrid::SetVertexColors()
 	bool SaveLoopFlag = false;
 
 	int32 i = SetVertexColorsLoopData.IndexSaved[0];
-	for (; i < LineVertices.Num(); i++)
+	for (; i < GridVertices.Num(); i++)
 	{
 		Indices[0] = i;
 		FlowControlUtility::SaveLoopData(this, SetVertexColorsLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
@@ -677,7 +676,6 @@ void AHexGrid::SetVertexColors()
 			return;
 		}
 
-		//SetVertexColor(LineVertexColor);
 		SetVertexColorByBlockMode(i);
 		Count++;
 	}
@@ -688,7 +686,7 @@ void AHexGrid::SetVertexColors()
 
 void AHexGrid::SetVertexColor(const FLinearColor& Color)
 {
-	LineVertexColors.Add(FLinearColor(Color.R, Color.G, Color.B, Color.A));
+	GridVertexColors.Add(FLinearColor(Color.R, Color.G, Color.B, Color.A));
 }
 
 void AHexGrid::SetVertexColorByBlockMode(int32 Index)
@@ -714,23 +712,31 @@ void AHexGrid::SetVertexColorByLowBlock(int32 Index)
 
 	float H = 120.0f / float(LevelMax - LevelMin + 1) * float(Level);
 	FLinearColor LinearColor = UKismetMathLibrary::HSVToRGB(H, 1.0, 1.0, 1.0);
-	LineVertexColors.Add(LinearColor);
+	GridVertexColors.Add(LinearColor);
 }
 
 void AHexGrid::CreateHexGridLineMesh()
 {
-	if (bUseLineVextexColors) {
-		HexGridMesh->CreateMeshSection_LinearColor(0, LineVertices, LineTriangles, TArray<FVector>(), TArray<FVector2D>(), LineVertexColors, TArray<FProcMeshTangent>(), false);
+	if (!bShowGrid) {
+		FTimerHandle TimerHandle;
+		WorkflowState = Enum_HexGridWorkflowState::Done;
+		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
+		UE_LOG(HexGrid, Log, TEXT("Don't show grid!"));
+		return;
+	}
+	
+	if (bUseBlockVextexColors) {
+		HexGridMesh->CreateMeshSection_LinearColor(0, GridVertices, GridTriangles, TArray<FVector>(), TArray<FVector2D>(), GridVertexColors, TArray<FProcMeshTangent>(), false);
 	}
 	else {
-		HexGridMesh->CreateMeshSection(0, LineVertices, LineTriangles, TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
+		HexGridMesh->CreateMeshSection(0, GridVertices, GridTriangles, TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
 	}
 	
 }
 
 void AHexGrid::SetHexGridLineMaterial()
 {
-	if (bUseLineVextexColors) {
+	if (bUseBlockVextexColors) {
 		HexGridMesh->SetMaterial(0, HexGridLineVCMaterialIns);
 	}
 	else {
@@ -832,7 +838,7 @@ void AHexGrid::SetHexVerticesByIndex(int32 Index)
 {
 	for (int32 i = 0; i < 6; i++)
 	{
-		MouseOverVertices.Add(LineVertices[Index * 12 + i * 2]);
+		MouseOverVertices.Add(GridVertices[Index * 12 + i * 2]);
 	}
 }
 
