@@ -12,8 +12,6 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(Terrain, Log, All);
 
-class AHexGrid;
-
 UENUM(BlueprintType)
 enum class Enum_TerrainWorkflowState: uint8
 {
@@ -124,6 +122,12 @@ private:
 	float TreeAreaScaleA = 1.0;
 	float OneMinTAS = 0.0;
 
+	//Input
+	bool LeftHold = false;
+	bool RightHold = false;
+
+	APlayerController* Controller;
+
 protected:
 	//Mesh
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly)
@@ -182,8 +186,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float HighLandLevel = 0.5;
 	
-	float TileSizeMultiplier;
-	float TileHeightMultiplier;
+	UPROPERTY(BlueprintReadOnly)
+	float TileSizeMultiplier = 100;
+
+	UPROPERTY(BlueprintReadOnly)
+	float TileHeightMultiplier = 100;
+
+	UPROPERTY(BlueprintReadOnly)
+	float TerrainWidth;
+
+	UPROPERTY(BlueprintReadOnly)
+	float TerrainHeight;
 
 	//Water variables BP
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Water", meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -269,18 +282,49 @@ protected:
 
 	//Hex grid
 	UPROPERTY(BlueprintReadOnly)
-	AHexGrid* HexGrid;
+	class AHexGrid* HexGrid;
 	
+	//Input
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
+	class UInputAction* MouseLeftHoldAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
+	class UInputAction* MouseRightHoldAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
+	float HoldTraceLength = 1000000;
+
 public:	
 	// Sets default values for this actor's properties
 	ATerrain();
 
-	bool isCreateNoiseDone();
+	bool IsCreateNoiseDone();
 	float GetAltitudeByPos2D(const FVector2D Pos2D, AActor* Caller);
+
+	UFUNCTION(BlueprintCallable)
+	bool IsLeftHold();
+	UFUNCTION(BlueprintCallable)
+	bool IsRightHold();
 
 private:
 	//Timer delegate
 	void BindDelegate();
+
+	//Input
+	void EnablePlayer();
+	void BindEnchancedInputAction();
+
+	UFUNCTION()
+	void OnLeftHoldStarted(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void OnLeftHoldCompleted(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void OnRightHoldStarted(const FInputActionValue& Value);
+
+	UFUNCTION()
+	void OnRightHoldCompleted(const FInputActionValue& Value);
 
 	//Init workflow
 	void InitWorkflow();
@@ -297,7 +341,7 @@ private:
 
 	//create Workflow
 	UFUNCTION()
-		void CreateTerrainFlow();
+	void CreateTerrainFlow();
 
 	//Vertices create
 	void CreateVertices();
@@ -341,6 +385,9 @@ private:
 
 	void ResetProgress();
 
+	//Input
+	bool IsMouseClickTraceHit();
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -356,6 +403,19 @@ public:
 	FORCEINLINE bool IsWorkFlowDone()
 	{
 		return WorkflowState == Enum_TerrainWorkflowState::Done;
+	}
+
+	FORCEINLINE bool IsWorkFlowOverStage(Enum_TerrainWorkflowState State)
+	{
+		return WorkflowState > State;
+	}
+
+	FORCEINLINE float GetWidth() {
+		return TerrainWidth;
+	}
+
+	FORCEINLINE float GetHeight() {
+		return TerrainHeight;
 	}
 
 };

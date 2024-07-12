@@ -127,7 +127,7 @@ void AHexGrid::WaitTerrainNoise()
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATerrain::StaticClass(), Out_Actors);
 	if (Out_Actors.Num() == 1) {
 		Terrain = (ATerrain*)Out_Actors[0];
-		if (Terrain->isCreateNoiseDone()) {
+		if (Terrain->IsCreateNoiseDone()) {
 			WorkflowState = Enum_HexGridWorkflowState::LoadParams;
 			GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
 			UE_LOG(HexGrid, Log, TEXT("Wait terrain noise done!"));

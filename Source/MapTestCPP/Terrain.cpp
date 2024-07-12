@@ -11,6 +11,7 @@
 #include <Math/UnrealMathUtility.h>
 #include <TimerManager.h>
 #include <ProceduralMeshComponent.h>
+#include <EnhancedInputComponent.h>
 
 DEFINE_LOG_CATEGORY(Terrain);
 
@@ -26,7 +27,7 @@ ATerrain::ATerrain()
 
 	WaterMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("WaterMesh"));
 	WaterMesh->SetupAttachment(TerrainMesh);
-	WaterMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	WaterMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	WaterMesh->SetWorldLocation(FVector(0.0, 0.0, -1.0));
 
 	BindDelegate();
@@ -37,9 +38,12 @@ ATerrain::ATerrain()
 void ATerrain::BeginPlay()
 {
 	Super::BeginPlay();
+	EnablePlayer();
+	BindEnchancedInputAction();
 
 	WorkflowState = Enum_TerrainWorkflowState::InitWorkflow;
 	CreateTerrainFlow();
+
 }
 
 // Called every frame
@@ -52,6 +56,85 @@ void ATerrain::Tick(float DeltaTime)
 void ATerrain::BindDelegate()
 {
 	WorkflowDelegate.BindUFunction(Cast<UObject>(this), TEXT("CreateTerrainFlow"));
+}
+
+void ATerrain::EnablePlayer()
+{
+	APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	if (PlayerController) {
+		EnableInput(PlayerController);
+		Controller = PlayerController;
+	}
+}
+
+void ATerrain::BindEnchancedInputAction()
+{
+	if (InputComponent) {
+		if (MouseLeftHoldAction != nullptr && MouseRightHoldAction != nullptr) {
+			UEnhancedInputComponent* EnhancedInputComp = Cast<UEnhancedInputComponent>(InputComponent);
+			EnhancedInputComp->BindAction(MouseLeftHoldAction, ETriggerEvent::Started, this,
+				&ATerrain::OnLeftHoldStarted);
+			EnhancedInputComp->BindAction(MouseLeftHoldAction, ETriggerEvent::Completed, this,
+				&ATerrain::OnLeftHoldCompleted);
+			EnhancedInputComp->BindAction(MouseRightHoldAction, ETriggerEvent::Started, this,
+				&ATerrain::OnRightHoldStarted);
+			EnhancedInputComp->BindAction(MouseRightHoldAction, ETriggerEvent::Completed, this,
+				&ATerrain::OnRightHoldCompleted);
+		}
+		else {
+			UE_LOG(Terrain, Error, TEXT("No setting Input Action."));
+		}
+	}
+}
+
+bool ATerrain::IsMouseClickTraceHit()
+{
+	FVector location, direction;
+	Controller->DeprojectMousePositionToWorld(location, direction);
+
+	FHitResult result;
+	FCollisionQueryParams params;
+	bool isHit = TerrainMesh->LineTraceComponent(result, location, HoldTraceLength * direction + location,
+		params);
+	return isHit;
+}
+
+void ATerrain::OnLeftHoldStarted(const FInputActionValue& Value)
+{
+	if (IsMouseClickTraceHit()) {
+		LeftHold = true;
+	}
+}
+
+void ATerrain::OnLeftHoldCompleted(const FInputActionValue& Value)
+{
+	if (IsMouseClickTraceHit()) {
+		LeftHold = false;
+	}
+}
+
+void ATerrain::OnRightHoldStarted(const FInputActionValue& Value)
+{
+	if (IsMouseClickTraceHit()) {
+		RightHold = true;
+	}
+}
+
+void ATerrain::OnRightHoldCompleted(const FInputActionValue& Value)
+{
+	if (IsMouseClickTraceHit()) {
+		RightHold = false;
+	}
+}
+
+bool ATerrain::IsLeftHold()
+{
+	return LeftHold;
+}
+
+bool ATerrain::IsRightHold()
+{
+	return RightHold;
 }
 
 void ATerrain::CreateNoise()
@@ -129,7 +212,7 @@ void ATerrain::CreateNoise()
 	}
 }
 
-bool ATerrain::isCreateNoiseDone()
+bool ATerrain::IsCreateNoiseDone()
 {
 	return CreateNoiseDone;
 }
@@ -138,6 +221,9 @@ void ATerrain::InitTileParameter()
 {
 	TileSizeMultiplier = TileSize * TileScale;
 	TileHeightMultiplier = TileHeight * TileScale;
+
+	TerrainWidth = NumRows * TileSizeMultiplier;
+	TerrainHeight = NumColumns * TileSizeMultiplier;
 }
 
 void ATerrain::InitReceiveDecal()
