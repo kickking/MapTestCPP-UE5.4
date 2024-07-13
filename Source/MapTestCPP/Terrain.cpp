@@ -143,10 +143,11 @@ void ATerrain::CreateNoise()
 	NWTerrainLow = NewObject<UFastNoiseWrapper>(this);
 	NWMoisture = NewObject<UFastNoiseWrapper>(this);
 	NWTemperature = NewObject<UFastNoiseWrapper>(this);
+	NWBiomes = NewObject<UFastNoiseWrapper>(this);
 	NWTree = NewObject<UFastNoiseWrapper>(this);
 
 	if (NWTerrainHigh != nullptr && NWTerrainLow != nullptr && NWMoisture != nullptr && 
-		NWTemperature != nullptr && NWTree != nullptr) {
+		NWTemperature != nullptr && NWBiomes!=nullptr && NWTree != nullptr) {
 		NWTerrainHigh->SetupFastNoise(NWTerrainHigh_NoiseType,
 			NWTerrainHigh_NoiseSeed,
 			NWTerrainHigh_NoiseFrequency,
@@ -194,6 +195,18 @@ void ATerrain::CreateNoise()
 			NWTemperature_CellularJitter,
 			NWTemperature_CDF,
 			NWTemperature_CRT);
+
+		NWBiomes->SetupFastNoise(NWBiomes_NoiseType,
+			NWBiomes_NoiseSeed,
+			NWBiomes_NoiseFrequency,
+			NWBiomes_Interp,
+			NWBiomes_FractalType,
+			NWBiomes_Octaves,
+			NWBiomes_Lacunarity,
+			NWBiomes_Gain,
+			NWBiomes_CellularJitter,
+			NWBiomes_CDF,
+			NWBiomes_CRT);
 
 		NWTree->SetupFastNoise(NWTree_NoiseType,
 			NWTree_NoiseSeed,
@@ -481,7 +494,6 @@ float ATerrain::GetAltitudeByPos2D(const FVector2D Pos2D, AActor* Caller)
 {
 	float X = Pos2D.X / TileSizeMultiplier;
 	float Y = Pos2D.Y / TileSizeMultiplier;
-	//float Z = GetAltitude(NWTerrainHigh, X, Y, MountainBase, TileHeightMultiplier);
 	float Out_RatioStd;
 	float Out_Ratio;
 	float Z = GetAltitudePlus(X, Y, Out_RatioStd, Out_Ratio);
@@ -492,7 +504,6 @@ void ATerrain::CreateVertex(float X, float Y, float& OutRatioStd, float& OutRati
 {
 	float VX = X * TileSizeMultiplier;
 	float VY = Y * TileSizeMultiplier;
-	//float VZ = GetAltitude(NWTerrainHigh, X, Y, MountainBase, TileHeightMultiplier);
 	float VZ = GetAltitudePlus(X, Y, OutRatioStd, OutRatio);
 	Vertices.Add(FVector(VX, VY, VZ));
 }
@@ -504,12 +515,13 @@ void ATerrain::CreateUV(float X, float Y)
 	UVs.Add(FVector2D(UVx, UVy));
 }
 
-//Create vertex Color(R:Altidude G:Moisture B:Temperature)
+//Create vertex Color(R:Altidude G:Moisture B:Temperature A:Biomes)
 void ATerrain::CreateVertexColorsForAMT(float RatioStd, float X, float Y)
 {
 	float Moisture = GetNoise2DStd(NWMoisture, X, Y, 3.0);
 	float Temperature = GetNoise2DStd(NWTemperature, X, Y, 3.0);
-	VertexColors.Add(FLinearColor(RatioStd, Moisture, Temperature, 0.0));
+	float Biomes = GetNoise2DStd(NWBiomes, X, Y, 3.0);
+	VertexColors.Add(FLinearColor(RatioStd, Moisture, Temperature, Biomes));
 }
 
 void ATerrain::CalRatioBelowZero(float Ratio)

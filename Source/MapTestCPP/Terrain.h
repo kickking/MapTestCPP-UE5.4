@@ -84,6 +84,18 @@ private:
 	EFastNoise_CellularDistanceFunction NWTemperature_CDF = EFastNoise_CellularDistanceFunction::Euclidean;
 	EFastNoise_CellularReturnType NWTemperature_CRT = EFastNoise_CellularReturnType::CellValue;
 
+	//noise param for biomes
+	UFastNoiseWrapper* NWBiomes;
+	EFastNoise_NoiseType NWBiomes_NoiseType = EFastNoise_NoiseType::PerlinFractal;
+	EFastNoise_Interp NWBiomes_Interp = EFastNoise_Interp::Quintic;
+	EFastNoise_FractalType NWBiomes_FractalType = EFastNoise_FractalType::FBM;
+	int32 NWBiomes_Octaves = 3;
+	float NWBiomes_Lacunarity = 2.0;
+	float NWBiomes_Gain = 0.5;
+	float NWBiomes_CellularJitter = 0.45;
+	EFastNoise_CellularDistanceFunction NWBiomes_CDF = EFastNoise_CellularDistanceFunction::Euclidean;
+	EFastNoise_CellularReturnType NWBiomes_CRT = EFastNoise_CellularReturnType::CellValue;
+
 	//noise param for tree
 	UFastNoiseWrapper* NWTree;
 	EFastNoise_NoiseType NWTree_NoiseType = EFastNoise_NoiseType::PerlinFractal;
@@ -149,12 +161,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Moisture")
 	int32 NWMoisture_NoiseSeed = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Moisture", meta = (ClampMin = "0.0"))
-	float NWMoisture_NoiseFrequency = 0.01;
+	float NWMoisture_NoiseFrequency = 0.005;
 	//Noise variables BP for temperature
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Temperature")
 	int32 NWTemperature_NoiseSeed = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Temperature", meta = (ClampMin = "0.0"))
-	float NWTemperature_NoiseFrequency = 0.01;
+	float NWTemperature_NoiseFrequency = 0.004;
+	//Noise variables BP for biomes
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Biomes")
+	int32 NWBiomes_NoiseSeed = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Biomes", meta = (ClampMin = "0.0"))
+	float NWBiomes_NoiseFrequency = 0.003;
 	//Noise variables BP for tree
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Tree")
 	int32 NWTree_NoiseSeed = 0;
