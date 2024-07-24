@@ -139,38 +139,52 @@ bool ATerrain::IsRightHold()
 
 void ATerrain::CreateNoise()
 {
-	NWTerrainHigh = NewObject<UFastNoiseWrapper>(this);
-	NWTerrainLow = NewObject<UFastNoiseWrapper>(this);
+	NWHighMountain = NewObject<UFastNoiseWrapper>(this);
+	NWLowMountain = NewObject<UFastNoiseWrapper>(this);
+	NWWater = NewObject<UFastNoiseWrapper>(this);
 	NWMoisture = NewObject<UFastNoiseWrapper>(this);
 	NWTemperature = NewObject<UFastNoiseWrapper>(this);
 	NWBiomes = NewObject<UFastNoiseWrapper>(this);
 	NWTree = NewObject<UFastNoiseWrapper>(this);
 
-	if (NWTerrainHigh != nullptr && NWTerrainLow != nullptr && NWMoisture != nullptr && 
-		NWTemperature != nullptr && NWBiomes!=nullptr && NWTree != nullptr) {
-		NWTerrainHigh->SetupFastNoise(NWTerrainHigh_NoiseType,
-			NWTerrainHigh_NoiseSeed,
-			NWTerrainHigh_NoiseFrequency,
-			NWTerrainHigh_Interp,
-			NWTerrainHigh_FractalType,
-			NWTerrainHigh_Octaves,
-			NWTerrainHigh_Lacunarity,
-			NWTerrainHigh_Gain,
-			NWTerrainHigh_CellularJitter,
-			NWTerrainHigh_CDF,
-			NWTerrainHigh_CRT);
+	if (NWHighMountain != nullptr && NWLowMountain != nullptr && NWWater != nullptr && 
+		NWMoisture != nullptr && NWTemperature != nullptr && NWBiomes!=nullptr && 
+		NWTree != nullptr) {
+		NWHighMountain->SetupFastNoise(NWHighMountain_NoiseType,
+			NWHighMountain_NoiseSeed,
+			NWHighMountain_NoiseFrequency,
+			NWHighMountain_Interp,
+			NWHighMountain_FractalType,
+			NWHighMountain_Octaves,
+			NWHighMountain_Lacunarity,
+			NWHighMountain_Gain,
+			NWHighMountain_CellularJitter,
+			NWHighMountain_CDF,
+			NWHighMountain_CRT);
 
-		NWTerrainLow->SetupFastNoise(NWTerrainLow_NoiseType,
-			NWTerrainLow_NoiseSeed,
-			NWTerrainLow_NoiseFrequency,
-			NWTerrainLow_Interp,
-			NWTerrainLow_FractalType,
-			NWTerrainLow_Octaves,
-			NWTerrainLow_Lacunarity,
-			NWTerrainLow_Gain,
-			NWTerrainLow_CellularJitter,
-			NWTerrainLow_CDF,
-			NWTerrainLow_CRT);
+		NWLowMountain->SetupFastNoise(NWLowMountain_NoiseType,
+			NWLowMountain_NoiseSeed,
+			NWLowMountain_NoiseFrequency,
+			NWLowMountain_Interp,
+			NWLowMountain_FractalType,
+			NWLowMountain_Octaves,
+			NWLowMountain_Lacunarity,
+			NWLowMountain_Gain,
+			NWLowMountain_CellularJitter,
+			NWLowMountain_CDF,
+			NWLowMountain_CRT);
+
+		NWWater->SetupFastNoise(NWWater_NoiseType,
+			NWWater_NoiseSeed,
+			NWWater_NoiseFrequency,
+			NWWater_Interp,
+			NWWater_FractalType,
+			NWWater_Octaves,
+			NWWater_Lacunarity,
+			NWWater_Gain,
+			NWWater_CellularJitter,
+			NWWater_CDF,
+			NWWater_CRT);
 
 		NWMoisture->SetupFastNoise(NWMoisture_NoiseType,
 			NWMoisture_NoiseSeed,
@@ -245,28 +259,6 @@ void ATerrain::InitReceiveDecal()
 	WaterMesh->SetReceivesDecals(false);
 }
 
-void ATerrain::InitMountainParam()
-{
-	MountainBaseA = FMath::Clamp<float>(MountainBase, 0.0, 1.0);
-	MountainBaseA = MountainBaseA > 0.0 ? MountainBaseA : 0.5;
-	OneMinMB = 1 - MountainBaseA;
-	OneMinMB = OneMinMB > 0.0 ? OneMinMB : 0.5;
-}
-
-void ATerrain::InitWaterParam()
-{
-	LandADVByWaterLvA = FMath::Lerp(2.7, 2.0, WaterLevel);
-	LandADVByWaterLvB = FMath::Lerp(2.2, 1.7, WaterLevel);
-}
-
-void ATerrain::InitARCal()
-{
-	ARL_Acc = 0.0;
-	ARL_Count = 0;
-	ARL_Lowest = 0.0;
-	ARL_Avg = 0.0;
-}
-
 void ATerrain::InitTreeParam()
 {
 	TreeAreaScaleA = FMath::Pow(TreeAreaScale, 0.2);
@@ -316,9 +308,6 @@ void ATerrain::InitWorkflow()
 	InitReceiveDecal();
 	InitLoopData();
 	InitHexGrid();
-	InitMountainParam();
-	InitWaterParam();
-	InitARCal();
 	InitTreeParam();
 
 	FTimerHandle TimerHandle;
@@ -422,8 +411,7 @@ void ATerrain::CreateVertices()
 			
 			CreateVertex(X, Y, RatioStd, Ratio);
 			CreateUV(X, Y);
-			CreateVertexColorsForAMT(RatioStd, X, Y);
-			CalRatioBelowZero(Ratio);
+			CreateVertexColorsForAMTA(RatioStd, X, Y);
 			AddTreeValues(X, Y);
 
 			ProgressCurrent = CreateVerticesLoopData.Count;
@@ -433,50 +421,68 @@ void ATerrain::CreateVertices()
 	}
 	ResetProgress();
 
-	ARL_Avg = ARL_Acc / ARL_Count;
-	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("AltitudeOffset"),
-		ARL_Avg * HighLandLevel);
-
 	WorkflowState = Enum_TerrainWorkflowState::CreateTriangles;
 	FTimerHandle TimerHandle;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, CreateVerticesLoopData.Rate, false);
 	UE_LOG(Terrain, Log, TEXT("Create vertices and UVs done."));
 }
 
-float ATerrain::GetAltitude(UFastNoiseWrapper* NoiseWP, float X, float Y, float base, float Multiplier)
+float ATerrain::GetAltitude(float X, float Y, float& OutRatioStd, float& OutRatio)
 {
-	float Value = 0.0;
-	if (NoiseWP != nullptr) {
-		Value = NoiseWP->GetNoise2D(X, Y);
-		float H = FMath::Clamp<float>(base, 0.0, 1.0);
-		Value = (Value + 1.0) * 0.5 - H;
-		Value = FMath::Clamp<float>(Value, 0.0, 1.0) * Multiplier / (1.0 - H);
-
+	OutRatio = GetHighMountainRatio(X, Y) + GetLowMountianRatio(X, Y);
+	if (HasWater) {
+		OutRatio += FMath::Lerp<float>(GetWaterRatio(X, Y), 0.0, OutRatio);
 	}
-	return Value;
+	OutRatioStd = OutRatio * 0.5 + 0.5;
+	return OutRatio * TileHeightMultiplier;
 }
 
-float ATerrain::GetAltitudePlus(float X, float Y, float& OutRatioStd, float& OutRatio)
+float ATerrain::MappingFromRangeToRange(float InputValue, const FStructHeightMapping& Mapping)
 {
-	float valueH = GetNoise2DStd(NWTerrainHigh, X, Y, 1.0);
-	float valueL = GetNoise2DStd(NWTerrainLow, X, Y, 1.0);
-	float value = FMath::Lerp(valueL, valueH, valueH);
-	float h = value - MountainBaseA;
-	float exp = 1.0;
-	if (h > 0) {
-		h = h / OneMinMB;
-		exp = FMath::Lerp(1.2, 1.0, h);
-		h = FMath::Pow(h, exp);
-	}else {
-		h = -h / MountainBaseA;
-		exp = FMath::Lerp(LandADVByWaterLvA, LandADVByWaterLvB, h);
-		h = FMath::Pow(h, exp);
-		h = -h;
+	float alpha = (Mapping.RangeMax - FMath::Clamp<float>(InputValue, Mapping.RangeMin, Mapping.RangeMax)) / (Mapping.RangeMax - Mapping.RangeMin);
+	return FMath::Lerp<float>(Mapping.MappingMax, Mapping.MappingMin, alpha);
+}
+
+float ATerrain::GetHeightRatio(UFastNoiseWrapper* NWP, const FStructHeightMapping& Mapping, float X, float Y)
+{
+	float value = 0.0;
+	if (NWP != nullptr) {
+		value = NWP->GetNoise2D(X, Y);
+		return MappingFromRangeToRange(value, Mapping);
 	}
-	value = TileHeightMultiplier * h;
-	OutRatio = h;
-	OutRatioStd = h * 0.5 + 0.5;
-	return value;
+	return 0.0f;
+}
+
+void ATerrain::MappingByLevel(float level, const FStructHeightMapping& InMapping, 
+	FStructHeightMapping& OutMapping)
+{
+	OutMapping.RangeMin = InMapping.RangeMin + InMapping.RangeMinOffset * level;
+	OutMapping.RangeMax = InMapping.RangeMax + InMapping.RangeMaxOffset * level;
+	OutMapping.MappingMin = InMapping.MappingMin;
+	OutMapping.MappingMax = InMapping.MappingMax;
+	OutMapping.RangeMinOffset = InMapping.RangeMinOffset;
+	OutMapping.RangeMaxOffset = InMapping.RangeMaxOffset;
+}
+
+float ATerrain::GetHighMountainRatio(float X, float Y)
+{
+	FStructHeightMapping mapping;
+	MappingByLevel(HighMountainLevel, HighRangeMapping, mapping);
+	return GetHeightRatio(NWHighMountain, mapping, X, Y);
+}
+
+float ATerrain::GetLowMountianRatio(float X, float Y)
+{
+	FStructHeightMapping mapping;
+	MappingByLevel(LowMountainLevel, LowRangeMapping, mapping);
+	return GetHeightRatio(NWLowMountain, mapping, X, Y);
+}
+
+float ATerrain::GetWaterRatio(float X, float Y)
+{
+	FStructHeightMapping mapping;
+	MappingByLevel(WaterLevel, WaterRangeMapping, mapping);
+	return GetHeightRatio(NWWater, mapping, X, Y);
 }
 
 float ATerrain::GetNoise2DStd(UFastNoiseWrapper* NWP, float X, float Y, float scale)
@@ -496,7 +502,7 @@ float ATerrain::GetAltitudeByPos2D(const FVector2D Pos2D, AActor* Caller)
 	float Y = Pos2D.Y / TileSizeMultiplier;
 	float Out_RatioStd;
 	float Out_Ratio;
-	float Z = GetAltitudePlus(X, Y, Out_RatioStd, Out_Ratio);
+	float Z = GetAltitude(X, Y, Out_RatioStd, Out_Ratio);
 	return Z;
 }
 
@@ -504,7 +510,7 @@ void ATerrain::CreateVertex(float X, float Y, float& OutRatioStd, float& OutRati
 {
 	float VX = X * TileSizeMultiplier;
 	float VY = Y * TileSizeMultiplier;
-	float VZ = GetAltitudePlus(X, Y, OutRatioStd, OutRatio);
+	float VZ = GetAltitude(X, Y, OutRatioStd, OutRatio);
 	Vertices.Add(FVector(VX, VY, VZ));
 }
 
@@ -516,23 +522,12 @@ void ATerrain::CreateUV(float X, float Y)
 }
 
 //Create vertex Color(R:Altidude G:Moisture B:Temperature A:Biomes)
-void ATerrain::CreateVertexColorsForAMT(float RatioStd, float X, float Y)
+void ATerrain::CreateVertexColorsForAMTA(float RatioStd, float X, float Y)
 {
 	float Moisture = GetNoise2DStd(NWMoisture, X, Y, 3.0);
 	float Temperature = GetNoise2DStd(NWTemperature, X, Y, 3.0);
 	float Biomes = GetNoise2DStd(NWBiomes, X, Y, 3.0);
 	VertexColors.Add(FLinearColor(RatioStd, Moisture, Temperature, Biomes));
-}
-
-void ATerrain::CalRatioBelowZero(float Ratio)
-{
-	if (Ratio < 0) {
-		ARL_Acc += Ratio;
-		ARL_Count++;
-		if (Ratio < ARL_Lowest) {
-			ARL_Lowest = Ratio;
-		}
-	}
 }
 
 void ATerrain::AddTreeValues(float X, float Y)
@@ -761,17 +756,24 @@ void ATerrain::SetTerrainMaterial()
 void ATerrain::CreateWater()
 {
 	SetWaterZ();
-	if (WaterLevel > 0.0) {
+	if (HasWater) {
 		CreateWaterPlane();
-		CreateCaustics();
+		if (HasCaustics) {
+			CreateCaustics();
+		}
 	}
 }
 
 void ATerrain::SetWaterZ()
 {
-	WaterZRatio = (ARL_Avg - ARL_Lowest) * WaterLevel + ARL_Lowest;
-	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("WaterZRatio"),
-		WaterZRatio);
+	if (HasWater) {
+		UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("WaterBaseRatio"),
+			WaterBaseRatio);
+	}
+	else {
+		UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("WaterBaseRatio"),
+			-2.0);
+	}
 }
 
 void ATerrain::CreateWaterPlane()
@@ -791,9 +793,9 @@ void ATerrain::CreateWaterVerticesAndUVs()
 	float HalfColumn = TileSizeMultiplier * NumColumns / 2.0;
 	float ColLen = TileSizeMultiplier * NumColumns / WaterNumColumns;
 
-	WaterPlaneZ = WaterZRatio * TileHeightMultiplier - WaterMesh->GetComponentLocation().Z;
+	WaterBase = WaterBaseRatio * TileHeightMultiplier - WaterMesh->GetComponentLocation().Z;
 	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("WaterBase"),
-		WaterPlaneZ);
+		WaterBase);
 
 	float UVRow = UVScale / WaterNumRows;
 	float UVColumn = UVScale / WaterNumColumns;
@@ -802,7 +804,7 @@ void ATerrain::CreateWaterVerticesAndUVs()
 	int32 j;
 	for (i = 0; i <= WaterNumRows; i++) {
 		for (j = 0; j <= WaterNumColumns; j++) {
-			WaterVertices.Add(FVector(RowLen * i - HalfRow, ColLen * j - HalfColumn, WaterPlaneZ));
+			WaterVertices.Add(FVector(RowLen * i - HalfRow, ColLen * j - HalfColumn, WaterBase));
 			WaterUVs.Add(FVector2D(UVRow * i - 0.5, UVColumn * j - 0.5));
 		}
 	}
@@ -856,12 +858,11 @@ void ATerrain::SetWaterMaterial()
 void ATerrain::CreateCaustics()
 {
 	float base = UKismetMaterialLibrary::GetScalarParameterValue(this, TerrainMPC, TEXT("WaterBase"));
-	float z = (base - ARL_Lowest * TileHeightMultiplier) / 2.0;
-	FVector size = UKismetMathLibrary::MakeVector(TileSizeMultiplier * NumRows, TileSizeMultiplier * NumColumns,
-		z);
-	FVector location = UKismetMathLibrary::MakeVector(0, 0, base - z);
+	float sink = (base - WaterRangeMapping.MappingMin * TileHeightMultiplier) / 2.0;
+	FVector size(TileSizeMultiplier * NumRows, TileSizeMultiplier * NumColumns, sink);
+	FVector location(0, 0, base - sink);
+	FRotator rotator(0.0, 0.0, 0.0);
 
-	UGameplayStatics::SpawnDecalAtLocation(this, CausticsMaterialIns, size, location);
-
+	UGameplayStatics::SpawnDecalAtLocation(this, CausticsMaterialIns, size, location, rotator);
 }
 

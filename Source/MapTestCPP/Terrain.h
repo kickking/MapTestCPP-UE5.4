@@ -36,29 +36,41 @@ class MAPTESTCPP_API ATerrain : public AActor
 private:
 	//noise param
 	bool CreateNoiseDone = false;
-	//noise param for highland of terrain
-	UFastNoiseWrapper* NWTerrainHigh;
-	EFastNoise_NoiseType NWTerrainHigh_NoiseType = EFastNoise_NoiseType::PerlinFractal;
-	EFastNoise_Interp NWTerrainHigh_Interp = EFastNoise_Interp::Quintic;
-	EFastNoise_FractalType NWTerrainHigh_FractalType = EFastNoise_FractalType::RigidMulti;
-	int32 NWTerrainHigh_Octaves = 6;
-	float NWTerrainHigh_Lacunarity = 2.0;
-	float NWTerrainHigh_Gain = 0.5;
-	float NWTerrainHigh_CellularJitter = 0.45;
-	EFastNoise_CellularDistanceFunction NWTerrainHigh_CDF = EFastNoise_CellularDistanceFunction::Euclidean;
-	EFastNoise_CellularReturnType NWTerrainHigh_CRT = EFastNoise_CellularReturnType::CellValue;
+	//noise param for high mountain
+	UFastNoiseWrapper* NWHighMountain;
+	EFastNoise_NoiseType NWHighMountain_NoiseType = EFastNoise_NoiseType::PerlinFractal;
+	EFastNoise_Interp NWHighMountain_Interp = EFastNoise_Interp::Quintic;
+	EFastNoise_FractalType NWHighMountain_FractalType = EFastNoise_FractalType::RigidMulti;
+	int32 NWHighMountain_Octaves = 6;
+	float NWHighMountain_Lacunarity = 2.0;
+	float NWHighMountain_Gain = 0.5;
+	float NWHighMountain_CellularJitter = 0.45;
+	EFastNoise_CellularDistanceFunction NWHighMountain_CDF = EFastNoise_CellularDistanceFunction::Euclidean;
+	EFastNoise_CellularReturnType NWHighMountain_CRT = EFastNoise_CellularReturnType::CellValue;
 	
-	//noise param for lowland of terrain
-	UFastNoiseWrapper* NWTerrainLow;
-	EFastNoise_NoiseType NWTerrainLow_NoiseType = EFastNoise_NoiseType::PerlinFractal;
-	EFastNoise_Interp NWTerrainLow_Interp = EFastNoise_Interp::Quintic;
-	EFastNoise_FractalType NWTerrainLow_FractalType = EFastNoise_FractalType::FBM;
-	int32 NWTerrainLow_Octaves = 1;
-	float NWTerrainLow_Lacunarity = 2.0;
-	float NWTerrainLow_Gain = 0.5;
-	float NWTerrainLow_CellularJitter = 0.45;
-	EFastNoise_CellularDistanceFunction NWTerrainLow_CDF = EFastNoise_CellularDistanceFunction::Euclidean;
-	EFastNoise_CellularReturnType NWTerrainLow_CRT = EFastNoise_CellularReturnType::CellValue;
+	//noise param for low mountain
+	UFastNoiseWrapper* NWLowMountain;
+	EFastNoise_NoiseType NWLowMountain_NoiseType = EFastNoise_NoiseType::PerlinFractal;
+	EFastNoise_Interp NWLowMountain_Interp = EFastNoise_Interp::Quintic;
+	EFastNoise_FractalType NWLowMountain_FractalType = EFastNoise_FractalType::RigidMulti;
+	int32 NWLowMountain_Octaves = 6;
+	float NWLowMountain_Lacunarity = 2.0;
+	float NWLowMountain_Gain = 0.5;
+	float NWLowMountain_CellularJitter = 0.45;
+	EFastNoise_CellularDistanceFunction NWLowMountain_CDF = EFastNoise_CellularDistanceFunction::Euclidean;
+	EFastNoise_CellularReturnType NWLowMountain_CRT = EFastNoise_CellularReturnType::CellValue;
+
+	//noise param for water
+	UFastNoiseWrapper* NWWater;
+	EFastNoise_NoiseType NWWater_NoiseType = EFastNoise_NoiseType::PerlinFractal;
+	EFastNoise_Interp NWWater_Interp = EFastNoise_Interp::Quintic;
+	EFastNoise_FractalType NWWater_FractalType = EFastNoise_FractalType::FBM;
+	int32 NWWater_Octaves = 2;
+	float NWWater_Lacunarity = 2.0;
+	float NWWater_Gain = 0.5;
+	float NWWater_CellularJitter = 0.45;
+	EFastNoise_CellularDistanceFunction NWWater_CDF = EFastNoise_CellularDistanceFunction::Euclidean;
+	EFastNoise_CellularReturnType NWWater_CRT = EFastNoise_CellularReturnType::CellValue;
 
 	//noise param for moisture
 	UFastNoiseWrapper* NWMoisture;
@@ -114,21 +126,8 @@ private:
 	//For normal calculate
 	TArray<FVector> NormalsAcc;
 
-	//mountain param
-	float MountainBaseA = 0.5;
-	float OneMinMB = 0.5;
-
 	//water param
-	float LandADVByWaterLvA = 1.0;
-	float LandADVByWaterLvB = 1.0;
-	float WaterZRatio;
-	float WaterPlaneZ;
-
-	//Altitude Ratio Land calculation
-	float ARL_Acc;
-	int32 ARL_Count;
-	float ARL_Lowest;
-	float ARL_Avg;
+	float WaterBase;
 
 	//Tree param
 	float TreeAreaScaleA = 1.0;
@@ -147,31 +146,36 @@ protected:
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly)
 	class UProceduralMeshComponent* WaterMesh;
 
-	//Noise variables BP for highland of terrain
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|TerrainHigh")
-	int32 NWTerrainHigh_NoiseSeed = 0;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|TerrainHigh", meta = (ClampMin = "0.0"))
-	float NWTerrainHigh_NoiseFrequency = 0.006;
-	//Noise variables BP for lowland of terrain
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|TerrainLow")
-	int32 NWTerrainLow_NoiseSeed = 0;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|TerrainLow", meta = (ClampMin = "0.0"))
-	float NWTerrainLow_NoiseFrequency = 0.01;
+	//Noise variables BP for high mountain
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|HighMountain")
+	int32 NWHighMountain_NoiseSeed = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|HighMountain", meta = (ClampMin = "0.0"))
+	float NWHighMountain_NoiseFrequency = 0.005;
+	//Noise variables BP for low mountain
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|LowMountain")
+	int32 NWLowMountain_NoiseSeed = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|LowMountain", meta = (ClampMin = "0.0"))
+	float NWLowMountain_NoiseFrequency = 0.01;
+	//Noise variables BP for water
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Water")
+	int32 NWWater_NoiseSeed = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Water", meta = (ClampMin = "0.0"))
+	float NWWater_NoiseFrequency = 0.01;
 	//Noise variables BP for moisture
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Moisture")
 	int32 NWMoisture_NoiseSeed = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Moisture", meta = (ClampMin = "0.0"))
-	float NWMoisture_NoiseFrequency = 0.005;
+	float NWMoisture_NoiseFrequency = 0.007;
 	//Noise variables BP for temperature
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Temperature")
 	int32 NWTemperature_NoiseSeed = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Temperature", meta = (ClampMin = "0.0"))
-	float NWTemperature_NoiseFrequency = 0.004;
+	float NWTemperature_NoiseFrequency = 0.007;
 	//Noise variables BP for biomes
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Biomes")
 	int32 NWBiomes_NoiseSeed = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Biomes", meta = (ClampMin = "0.0"))
-	float NWBiomes_NoiseFrequency = 0.003;
+	float NWBiomes_NoiseFrequency = 0.007;
 	//Noise variables BP for tree
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Noise|Tree")
 	int32 NWTree_NoiseSeed = 0;
@@ -181,49 +185,48 @@ protected:
 	//Tile variables BP
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0"))
 	int32 NumRows = 10;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0"))
 	int32 NumColumns = 10;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
 	float TileScale = 1.0;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
 	float TileSize = 100.0;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
-	float TileHeight = 10000.0;
-
+	float TileHeight = 5000.0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
 	float UVScale = 1.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float MountainBase = 0.6;
-	
+	float HighMountainLevel = 0.5;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
+	FStructHeightMapping HighRangeMapping = { 0.4, 0.6, 0.0, 0.7, -0.2, -0.2 };
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float HighLandLevel = 0.5;
-	
+	float LowMountainLevel = 0.5;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
+	FStructHeightMapping LowRangeMapping = { 0.5, 1.0, 0.0, 0.3, -0.4, 0.0 };
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
+	bool HasWater = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
+	bool HasCaustics = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float WaterLevel = 0.5;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
+	FStructHeightMapping WaterRangeMapping = { -0.6, -0.4, -0.3, 0.0, -0.2, 0.2 };
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "-1.0", ClampMax = "0.0"))
+	float WaterBaseRatio = -0.01;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "1"))
+	int32 WaterNumRows = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "1"))
+	int32 WaterNumColumns = 10;
+
 	UPROPERTY(BlueprintReadOnly)
 	float TileSizeMultiplier = 100;
-
 	UPROPERTY(BlueprintReadOnly)
 	float TileHeightMultiplier = 100;
-
 	UPROPERTY(BlueprintReadOnly)
 	float TerrainWidth;
-
 	UPROPERTY(BlueprintReadOnly)
 	float TerrainHeight;
-
-	//Water variables BP
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Water", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float WaterLevel = 1.0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Water", meta = (ClampMin = "1"))
-	int32 WaterNumRows = 10;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Water", meta = (ClampMin = "1"))
-	int32 WaterNumColumns = 10;
 
 	//Tree variables BP
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tree", meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -350,9 +353,6 @@ private:
 	void InitReceiveDecal();
 	void InitLoopData();
 	void InitHexGrid();
-	void InitMountainParam();
-	void InitWaterParam();
-	void InitARCal();
 	void InitTreeParam();
 	bool CheckMaterialSetting();
 
@@ -362,13 +362,19 @@ private:
 
 	//Vertices create
 	void CreateVertices();
-	float GetAltitude(UFastNoiseWrapper* NoiseWP, float X, float Y, float base, float Multiplier);
-	float GetAltitudePlus(float x, float y, float& OutRatioStd, float& OutRatio);
+	float GetAltitude(float X, float Y, float& OutRatioStd, float& OutRatio);
+	float MappingFromRangeToRange(float InputValue, const FStructHeightMapping& Mapping);
+	float GetHeightRatio(UFastNoiseWrapper* NWP, const FStructHeightMapping& Mapping, float X, float Y);
+	void MappingByLevel(float level, const FStructHeightMapping& InMapping, FStructHeightMapping& OutMapping);
+	float GetHighMountainRatio(float X, float Y);
+	float GetLowMountianRatio(float X, float Y);
+	float GetWaterRatio(float X, float Y);
+
+
 	float GetNoise2DStd(UFastNoiseWrapper* NWP, float X, float Y, float scale);
 	void CreateVertex(float X, float Y, float& OutRatioStd, float& OutRatio);
 	void CreateUV(float X, float Y);
-	void CreateVertexColorsForAMT(float RatioStd, float X, float Y);
-	void CalRatioBelowZero(float Ratio);
+	void CreateVertexColorsForAMTA(float RatioStd, float X, float Y);
 	void AddTreeValues(float X, float Y);
 
 	//Triangles create
