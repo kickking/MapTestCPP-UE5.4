@@ -21,7 +21,7 @@ UENUM(BlueprintType)
 enum class Enum_HexGridWorkflowState : uint8
 {
 	InitWorkflow,
-	WaitTerrainNoise,
+	WaitTerrainInit,
 	LoadParams,
 	LoadTiles,
 	LoadTileIndices,
@@ -210,7 +210,7 @@ private:
 	void InitLoopData();
 
 	//Wait terrain noise
-	void WaitTerrainNoise();
+	void WaitTerrain();
 
 	//Read file func
 	bool GetValidFilePath(const FString& RelPath, FString& FullPath);

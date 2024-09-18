@@ -54,8 +54,8 @@ void AHexGrid::CreateHexGridFlow()
 	case Enum_HexGridWorkflowState::InitWorkflow:
 		InitWorkflow();
 		break;
-	case Enum_HexGridWorkflowState::WaitTerrainNoise:
-		WaitTerrainNoise();
+	case Enum_HexGridWorkflowState::WaitTerrainInit:
+		WaitTerrain();
 		break;
 	case Enum_HexGridWorkflowState::LoadParams:
 		LoadParamsFromFile();
@@ -103,7 +103,7 @@ void AHexGrid::InitWorkflow()
 	InitLoopData();
 
 	FTimerHandle TimerHandle;
-	WorkflowState = Enum_HexGridWorkflowState::WaitTerrainNoise;
+	WorkflowState = Enum_HexGridWorkflowState::WaitTerrainInit;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
 	UE_LOG(HexGrid, Log, TEXT("Init workflow done!"));
 }
@@ -120,14 +120,14 @@ void AHexGrid::InitLoopData()
 	FlowControlUtility::InitLoopData(SetVertexColorsLoopData);
 }
 
-void AHexGrid::WaitTerrainNoise()
+void AHexGrid::WaitTerrain()
 {
 	FTimerHandle TimerHandle;
 	TArray<AActor*> Out_Actors;
 	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATerrain::StaticClass(), Out_Actors);
 	if (Out_Actors.Num() == 1) {
 		Terrain = (ATerrain*)Out_Actors[0];
-		if (Terrain->IsCreateNoiseDone()) {
+		if (Terrain->IsWorkFlowStepDone(Enum_TerrainWorkflowState::InitWorkflow)) {
 			WorkflowState = Enum_HexGridWorkflowState::LoadParams;
 			GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
 			UE_LOG(HexGrid, Log, TEXT("Wait terrain noise done!"));
@@ -619,7 +619,7 @@ void AHexGrid::SetTerrainLowBlockLevel()
 
 void AHexGrid::SetTileLowBlockLevel(FStructHexTileData& Data)
 {
-	if (Data.PositionZ > TerrainLowBlockPosZ) {
+	if (Data.PositionZ > TerrainLowBlockPosZ || Data.PositionZ < Terrain->GetWaterBase()) {
 		Data.TerrainLowBlockLevel = 0;
 		return;
 	}
@@ -645,7 +645,8 @@ void AHexGrid::SetLowBlockLevelByNeighbors(FStructHexTileData& Data, int32 Index
 		}
 		
 		TileIndex = TileIndices[key];
-		if (Tiles[TileIndex].PositionZ > TerrainLowBlockPosZ) {
+		if (Tiles[TileIndex].PositionZ > TerrainLowBlockPosZ || 
+			Tiles[TileIndex].PositionZ < Terrain->GetWaterBase()) {
 			Data.TerrainLowBlockLevel = Neighbors.Radius;
 			return;
 		}

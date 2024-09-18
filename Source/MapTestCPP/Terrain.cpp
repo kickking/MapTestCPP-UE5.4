@@ -234,14 +234,14 @@ void ATerrain::CreateNoise()
 			NWTree_CDF,
 			NWTree_CRT);
 
-		CreateNoiseDone = true;
+		//CreateNoiseDone = true;
 		UE_LOG(Terrain, Log, TEXT("Create and set Noise."));
 	}
 }
 
-bool ATerrain::IsCreateNoiseDone()
+bool ATerrain::IsWorkFlowStepDone(Enum_TerrainWorkflowState state)
 {
-	return CreateNoiseDone;
+	return WorkflowState > state;
 }
 
 void ATerrain::InitTileParameter()
@@ -291,6 +291,29 @@ void ATerrain::InitHexGrid()
 	}
 }
 
+void ATerrain::InitTerrainFormBaseRatio()
+{
+	if (HasWater) {
+		UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("LavaBaseRatio"),
+			LavaBaseRatio);
+	}
+	else {
+		UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("LavaBaseRatio"),
+			-2.0);
+	}
+	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("DesertBaseRatio"),
+		DesertBaseRatio);
+	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("SwampBaseRatio"),
+		SwampBaseRatio);
+
+}
+
+void ATerrain::InitWater()
+{
+	SetWaterZ();
+	WaterBase = WaterBaseRatio * TileHeightMultiplier - WaterMesh->GetComponentLocation().Z;
+}
+
 bool ATerrain::CheckMaterialSetting()
 {
 	bool ret = false;
@@ -308,6 +331,8 @@ void ATerrain::InitWorkflow()
 	InitReceiveDecal();
 	InitLoopData();
 	InitHexGrid();
+	InitTerrainFormBaseRatio();
+	InitWater();
 	InitTreeParam();
 
 	FTimerHandle TimerHandle;
@@ -431,10 +456,14 @@ float ATerrain::GetAltitude(float X, float Y, float& OutRatioStd, float& OutRati
 {
 	OutRatio = GetHighMountainRatio(X, Y) + GetLowMountianRatio(X, Y);
 	if (HasWater) {
-		OutRatio += FMath::Lerp<float>(GetWaterRatio(X, Y), 0.0, OutRatio);
+		float wRatio = GetWaterRatio(X, Y);
+		float alpha = 1 - wRatio / WaterBaseRatio;
+		alpha = FMath::Clamp<float>(alpha, 0.0, 1.0);
+		OutRatio = wRatio + FMath::Lerp<float>(wRatio, OutRatio, alpha);
 	}
 	OutRatioStd = OutRatio * 0.5 + 0.5;
-	return OutRatio * TileHeightMultiplier;
+	float z = OutRatio * TileHeightMultiplier;
+	return z;
 }
 
 float ATerrain::MappingFromRangeToRange(float InputValue, const FStructHeightMapping& Mapping)
@@ -481,8 +510,20 @@ float ATerrain::GetLowMountianRatio(float X, float Y)
 float ATerrain::GetWaterRatio(float X, float Y)
 {
 	FStructHeightMapping mapping;
+	FStructHeightMapping groundMapping;
 	MappingByLevel(WaterLevel, WaterRangeMapping, mapping);
-	return GetHeightRatio(NWWater, mapping, X, Y);
+	MappingByLevel(WaterLevel, WaterGroundRangeMapping, groundMapping);
+	float ratio = GetHeightRatio(NWWater, mapping, X, Y) + GetHeightRatio(NWWater, groundMapping, X, Y);
+	ratio = ratio > 0.0 ? 0.0 : ratio;
+
+	//cal water bank
+	ratio = FMath::Abs<float>(ratio);
+	float alpha = ratio * WaterBankSharpness;
+	alpha = FMath::Clamp<float>(alpha, 0.0, 1.0);
+	float exp = FMath::Lerp<float>(2.0, 1.0, alpha);
+	ratio = -FMath::Pow(ratio, exp);
+
+	return ratio;
 }
 
 float ATerrain::GetNoise2DStd(UFastNoiseWrapper* NWP, float X, float Y, float scale)
@@ -755,7 +796,6 @@ void ATerrain::SetTerrainMaterial()
 
 void ATerrain::CreateWater()
 {
-	SetWaterZ();
 	if (HasWater) {
 		CreateWaterPlane();
 		if (HasCaustics) {
@@ -793,7 +833,6 @@ void ATerrain::CreateWaterVerticesAndUVs()
 	float HalfColumn = TileSizeMultiplier * NumColumns / 2.0;
 	float ColLen = TileSizeMultiplier * NumColumns / WaterNumColumns;
 
-	WaterBase = WaterBaseRatio * TileHeightMultiplier - WaterMesh->GetComponentLocation().Z;
 	UKismetMaterialLibrary::SetScalarParameterValue(this, TerrainMPC, TEXT("WaterBase"),
 		WaterBase);
 
@@ -859,8 +898,8 @@ void ATerrain::CreateCaustics()
 {
 	float base = UKismetMaterialLibrary::GetScalarParameterValue(this, TerrainMPC, TEXT("WaterBase"));
 	float sink = (base - WaterRangeMapping.MappingMin * TileHeightMultiplier) / 2.0;
-	FVector size(TileSizeMultiplier * NumRows, TileSizeMultiplier * NumColumns, sink);
-	FVector location(0, 0, base - sink);
+	FVector size(TileSizeMultiplier * NumRows, TileSizeMultiplier * NumColumns, sink + 1);
+	FVector location(0, 0, base - sink - 1);
 	FRotator rotator(0.0, 0.0, 0.0);
 
 	UGameplayStatics::SpawnDecalAtLocation(this, CausticsMaterialIns, size, location, rotator);

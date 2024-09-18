@@ -34,8 +34,6 @@ class MAPTESTCPP_API ATerrain : public AActor
 	GENERATED_BODY()
 
 private:
-	//noise param
-	bool CreateNoiseDone = false;
 	//noise param for high mountain
 	UFastNoiseWrapper* NWHighMountain;
 	EFastNoise_NoiseType NWHighMountain_NoiseType = EFastNoise_NoiseType::PerlinFractal;
@@ -211,13 +209,27 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float WaterLevel = 0.5;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
-	FStructHeightMapping WaterRangeMapping = { -0.6, -0.4, -0.3, 0.0, -0.2, 0.2 };
+	FStructHeightMapping WaterRangeMapping = { -0.6, -0.4, -0.4, -0.1, 0.2, 0.2 };
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
+	FStructHeightMapping WaterGroundRangeMapping = { -0.4, 1.0, 0.1, 0.2, 0.2, 0.0 };
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "-1.0", ClampMax = "0.0"))
-	float WaterBaseRatio = -0.01;
+	float WaterBaseRatio = -0.005;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "1"))
 	int32 WaterNumRows = 10;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "1"))
 	int32 WaterNumColumns = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "-1.0", ClampMax = "1.0"))
+	float LavaBaseRatio = 0.02;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "-1.0", ClampMax = "1.0"))
+	float DesertBaseRatio = 0.03;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "-1.0", ClampMax = "1.0"))
+	float SwampBaseRatio = 0.03;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain")
+	float TerrainBlendOffset = 0.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "1.0"))
+	float TerrainBlendSharpness = 50.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Terrain", meta = (ClampMin = "1.0"))
+	float WaterBankSharpness = 50.0;
 
 	UPROPERTY(BlueprintReadOnly)
 	float TileSizeMultiplier = 100;
@@ -318,7 +330,7 @@ public:
 	// Sets default values for this actor's properties
 	ATerrain();
 
-	bool IsCreateNoiseDone();
+	bool IsWorkFlowStepDone(Enum_TerrainWorkflowState state);
 	float GetAltitudeByPos2D(const FVector2D Pos2D, AActor* Caller);
 
 	UFUNCTION(BlueprintCallable)
@@ -353,6 +365,8 @@ private:
 	void InitReceiveDecal();
 	void InitLoopData();
 	void InitHexGrid();
+	void InitTerrainFormBaseRatio();
+	void InitWater();
 	void InitTreeParam();
 	bool CheckMaterialSetting();
 
@@ -441,4 +455,8 @@ public:
 		return TerrainHeight;
 	}
 
+	FORCEINLINE float GetWaterBase() {
+		return WaterBase;
+	}
+	
 };
