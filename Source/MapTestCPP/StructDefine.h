@@ -54,10 +54,16 @@ struct FStructHexTileData
 	float PositionZ;
 
 	UPROPERTY(BlueprintReadOnly)
+	float AvgPositionZ;
+
+	UPROPERTY(BlueprintReadOnly)
 	TArray<FStructHexTileNeighbors> Neighbors;
 
 	UPROPERTY(BlueprintReadOnly)
 	int32 TerrainLowBlockLevel = -1; // -1 means no block
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 TerrainHighBlockLevel = -1; // -1 means no block
 };
 
 USTRUCT(BlueprintType)

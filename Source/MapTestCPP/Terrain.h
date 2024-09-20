@@ -137,6 +137,10 @@ private:
 
 	APlayerController* Controller;
 
+	float TileNumRowRatio = 1.0;
+	float TileNumColumnRatio = 1.0;
+	
+
 protected:
 	//Mesh
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly)
@@ -182,15 +186,19 @@ protected:
 
 	//Tile variables BP
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0"))
-	int32 NumRows = 10;
+	int32 NumRows = 249;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0"))
-	int32 NumColumns = 10;
+	int32 NumColumns = 249;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0"))
+	int32 StdNumRows = 249;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0"))
+	int32 StdNumColumns = 249;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
 	float TileScale = 1.0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
 	float TileSize = 100.0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
-	float TileHeight = 5000.0;
+	float TileAltitudeMax = 5000.0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Tile", meta = (ClampMin = "0.0"))
 	float UVScale = 1.0;
 
@@ -234,7 +242,7 @@ protected:
 	UPROPERTY(BlueprintReadOnly)
 	float TileSizeMultiplier = 100;
 	UPROPERTY(BlueprintReadOnly)
-	float TileHeightMultiplier = 100;
+	float TileAltitudeMultiplier = 100;
 	UPROPERTY(BlueprintReadOnly)
 	float TerrainWidth;
 	UPROPERTY(BlueprintReadOnly)
@@ -453,6 +461,10 @@ public:
 
 	FORCEINLINE float GetHeight() {
 		return TerrainHeight;
+	}
+
+	FORCEINLINE float GetTileAltitudeMultiplier() {
+		return TileAltitudeMultiplier;
 	}
 
 	FORCEINLINE float GetWaterBase() {

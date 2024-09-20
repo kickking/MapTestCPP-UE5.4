@@ -28,6 +28,7 @@ enum class Enum_HexGridWorkflowState : uint8
 	LoadVertices,
 	LoadTriangles,
 	SetTilesPosZ,
+	SetTilesAvgPosZ,
 	SetVerticesPosZ,
 	SetTerrainLowBlockLevel,
 	SetVertexColors,
@@ -129,6 +130,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
 	FStructLoopData SetTilesPosZLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
+	FStructLoopData SetTilesAvgPosZLoopData;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
 	FStructLoopData SetVerticesPosZLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
 	FStructLoopData SetTerrainLowBlockLevelLoopData;
@@ -189,8 +192,8 @@ protected:
 	int32 MouseOverShowRadius = 1;
 
 	//Block
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block")
-	float TerrainLowBlockPosZ = 0.0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float TerrainLowBlockRatio = 0.0;
 	
 public:	
 	// Sets default values for this actor's properties
@@ -252,7 +255,9 @@ private:
 
 	//Set tiles PosZ
 	void SetTilesPosZ();
+	void SetTilesAvgPosZ();
 	void SetTilePosZ(FStructHexTileData& Data);
+	void SetTileAvgPosZ(FStructHexTileData& Data);
 
 	//Set Vertices PosZ
 	void SetVerticesPosZ();

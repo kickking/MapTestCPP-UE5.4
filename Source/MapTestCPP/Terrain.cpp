@@ -247,10 +247,14 @@ bool ATerrain::IsWorkFlowStepDone(Enum_TerrainWorkflowState state)
 void ATerrain::InitTileParameter()
 {
 	TileSizeMultiplier = TileSize * TileScale;
-	TileHeightMultiplier = TileHeight * TileScale;
+	TileAltitudeMultiplier = TileAltitudeMax * TileScale;
 
 	TerrainWidth = NumRows * TileSizeMultiplier;
 	TerrainHeight = NumColumns * TileSizeMultiplier;
+
+	TileNumRowRatio = (float)StdNumRows / (float)NumRows;
+	TileNumColumnRatio = (float)StdNumColumns / (float)NumColumns;
+
 }
 
 void ATerrain::InitReceiveDecal()
@@ -311,7 +315,7 @@ void ATerrain::InitTerrainFormBaseRatio()
 void ATerrain::InitWater()
 {
 	SetWaterZ();
-	WaterBase = WaterBaseRatio * TileHeightMultiplier - WaterMesh->GetComponentLocation().Z;
+	WaterBase = WaterBaseRatio * TileAltitudeMultiplier - WaterMesh->GetComponentLocation().Z;
 }
 
 bool ATerrain::CheckMaterialSetting()
@@ -462,7 +466,7 @@ float ATerrain::GetAltitude(float X, float Y, float& OutRatioStd, float& OutRati
 		OutRatio = wRatio + FMath::Lerp<float>(wRatio, OutRatio, alpha);
 	}
 	OutRatioStd = OutRatio * 0.5 + 0.5;
-	float z = OutRatio * TileHeightMultiplier;
+	float z = OutRatio * TileAltitudeMultiplier;
 	return z;
 }
 
@@ -476,7 +480,7 @@ float ATerrain::GetHeightRatio(UFastNoiseWrapper* NWP, const FStructHeightMappin
 {
 	float value = 0.0;
 	if (NWP != nullptr) {
-		value = NWP->GetNoise2D(X, Y);
+		value = NWP->GetNoise2D(X * TileNumRowRatio, Y * TileNumColumnRatio);
 		return MappingFromRangeToRange(value, Mapping);
 	}
 	return 0.0f;
@@ -520,7 +524,7 @@ float ATerrain::GetWaterRatio(float X, float Y)
 	ratio = FMath::Abs<float>(ratio);
 	float alpha = ratio * WaterBankSharpness;
 	alpha = FMath::Clamp<float>(alpha, 0.0, 1.0);
-	float exp = FMath::Lerp<float>(2.0, 1.0, alpha);
+	float exp = FMath::Lerp<float>(3.0, 1.0, alpha);
 	ratio = -FMath::Pow(ratio, exp);
 
 	return ratio;
@@ -530,7 +534,7 @@ float ATerrain::GetNoise2DStd(UFastNoiseWrapper* NWP, float X, float Y, float sc
 {
 	float value = 0.0;
 	if (NWP != nullptr) {
-		value = NWP->GetNoise2D(X, Y);
+		value = NWP->GetNoise2D(X * TileNumRowRatio, Y * TileNumColumnRatio);
 		value = FMath::Clamp<float>(value * scale, -1.0, 1.0);
 		value = (value + 1) * 0.5;
 	}
@@ -897,7 +901,7 @@ void ATerrain::SetWaterMaterial()
 void ATerrain::CreateCaustics()
 {
 	float base = UKismetMaterialLibrary::GetScalarParameterValue(this, TerrainMPC, TEXT("WaterBase"));
-	float sink = (base - WaterRangeMapping.MappingMin * TileHeightMultiplier) / 2.0;
+	float sink = (base - WaterRangeMapping.MappingMin * TileAltitudeMultiplier) / 2.0;
 	FVector size(TileSizeMultiplier * NumRows, TileSizeMultiplier * NumColumns, sink + 1);
 	FVector location(0, 0, base - sink - 1);
 	FRotator rotator(0.0, 0.0, 0.0);

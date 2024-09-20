@@ -75,6 +75,9 @@ void AHexGrid::CreateHexGridFlow()
 	case Enum_HexGridWorkflowState::SetTilesPosZ:
 		SetTilesPosZ();
 		break;
+	case Enum_HexGridWorkflowState::SetTilesAvgPosZ:
+		SetTilesAvgPosZ();
+		break;
 	case Enum_HexGridWorkflowState::SetVerticesPosZ:
 		SetVerticesPosZ();
 		break;
@@ -115,6 +118,7 @@ void AHexGrid::InitLoopData()
 	FlowControlUtility::InitLoopData(LoadVerticesLoopData);
 	FlowControlUtility::InitLoopData(LoadTrianglesLoopData);
 	FlowControlUtility::InitLoopData(SetTilesPosZLoopData);
+	FlowControlUtility::InitLoopData(SetTilesAvgPosZLoopData);
 	FlowControlUtility::InitLoopData(SetVerticesPosZLoopData);
 	FlowControlUtility::InitLoopData(SetTerrainLowBlockLevelLoopData);
 	FlowControlUtility::InitLoopData(SetVertexColorsLoopData);
@@ -545,7 +549,7 @@ void AHexGrid::SetTilesPosZ()
 		Count++;
 	}
 	FTimerHandle TimerHandle;
-	WorkflowState = Enum_HexGridWorkflowState::SetVerticesPosZ;
+	WorkflowState = Enum_HexGridWorkflowState::SetTilesAvgPosZ;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, SetTilesPosZLoopData.Rate, false);
 	UE_LOG(HexGrid, Log, TEXT("Set tiles pos z done!"));
 
@@ -555,6 +559,54 @@ void AHexGrid::SetTilePosZ(FStructHexTileData& Data)
 {
 	Data.PositionZ = Terrain->GetAltitudeByPos2D(Data.Position2D, this);
 }
+
+void AHexGrid::SetTilesAvgPosZ()
+{
+	int32 Count = 0;
+	TArray<int32> Indices = { 0 };
+	bool SaveLoopFlag = false;
+
+	int32 i = SetTilesAvgPosZLoopData.IndexSaved[0];
+	for (; i < Tiles.Num(); i++)
+	{
+		Indices[0] = i;
+		FlowControlUtility::SaveLoopData(this, SetTilesAvgPosZLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
+		if (SaveLoopFlag) {
+			return;
+		}
+
+		SetTileAvgPosZ(Tiles[i]);
+		Count++;
+	}
+	FTimerHandle TimerHandle;
+	WorkflowState = Enum_HexGridWorkflowState::SetVerticesPosZ;
+	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, SetTilesAvgPosZLoopData.Rate, false);
+	UE_LOG(HexGrid, Log, TEXT("Set tiles avg pos z done!"));
+}
+
+void AHexGrid::SetTileAvgPosZ(FStructHexTileData& Data)
+{
+	float Sum = 0.0;
+	int32 Count = 0;
+	if (Data.Neighbors.Num() >= 1) {
+		FStructHexTileNeighbors Neighbors = Data.Neighbors[0];
+		int32 TileIndex;
+		for (int32 i = 0; i < Neighbors.Tiles.Num(); i++) {
+			FIntPoint key = Neighbors.Tiles[i];
+			if (!TileIndices.Contains(key)) {
+				continue;
+			}
+
+			TileIndex = TileIndices[key];
+			Sum += Tiles[TileIndex].PositionZ;
+			Count++;
+		}
+		Sum += Data.PositionZ;
+		Count++;
+	}
+	Data.AvgPositionZ = Sum / Count;
+}
+
 
 void AHexGrid::SetVerticesPosZ()
 {
@@ -619,7 +671,8 @@ void AHexGrid::SetTerrainLowBlockLevel()
 
 void AHexGrid::SetTileLowBlockLevel(FStructHexTileData& Data)
 {
-	if (Data.PositionZ > TerrainLowBlockPosZ || Data.PositionZ < Terrain->GetWaterBase()) {
+	if (Data.AvgPositionZ > TerrainLowBlockRatio * Terrain->GetTileAltitudeMultiplier() ||
+		Data.AvgPositionZ < Terrain->GetWaterBase()) {
 		Data.TerrainLowBlockLevel = 0;
 		return;
 	}
@@ -645,8 +698,8 @@ void AHexGrid::SetLowBlockLevelByNeighbors(FStructHexTileData& Data, int32 Index
 		}
 		
 		TileIndex = TileIndices[key];
-		if (Tiles[TileIndex].PositionZ > TerrainLowBlockPosZ || 
-			Tiles[TileIndex].PositionZ < Terrain->GetWaterBase()) {
+		if (Tiles[TileIndex].AvgPositionZ > TerrainLowBlockRatio * Terrain->GetTileAltitudeMultiplier() ||
+			Tiles[TileIndex].AvgPositionZ < Terrain->GetWaterBase()) {
 			Data.TerrainLowBlockLevel = Neighbors.Radius;
 			return;
 		}
