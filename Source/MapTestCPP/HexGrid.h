@@ -32,6 +32,8 @@ enum class Enum_HexGridWorkflowState : uint8
 	SetVerticesPosZ,
 	SetTerrainLowBlockLevel,
 	SetVertexColors,
+	CreateCenterVertices,
+	CreateCenterTriangles,
 	DrawMesh,
 	Done,
 	Error
@@ -69,10 +71,15 @@ private:
 	//Mouse over
 	Hex MouseOverHex;
 
+	//Block Data
+	int32 BlockLevelMax = 0;
+
 protected:
 	//Mesh
 	UPROPERTY(BlueprintReadOnly)
 	class UProceduralMeshComponent* HexGridMesh;
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Custom|HexMesh")
+	class UInstancedStaticMeshComponent* HexMesh;
 	UPROPERTY(BlueprintReadOnly)
 	class UProceduralMeshComponent* MouseOverMesh;
 
@@ -137,6 +144,8 @@ protected:
 	FStructLoopData SetTerrainLowBlockLevelLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
 	FStructLoopData SetVertexColorsLoopData;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
+	FStructLoopData AddTilesInstanceLoopData;
 
 	//Load from data file
 	UPROPERTY(BlueprintReadOnly)
@@ -151,6 +160,11 @@ protected:
 	TArray<int32> GridTriangles;
 	UPROPERTY(BlueprintReadOnly)
 	TArray<FLinearColor> GridVertexColors;
+
+	UPROPERTY(BlueprintReadOnly)
+	TArray<FVector> GridCenterVertices;
+	UPROPERTY(BlueprintReadOnly)
+	TArray<int32> GridCenterTriangles;
 
 	UPROPERTY(BlueprintReadOnly)
 	TArray<FVector> MouseOverVertices;
@@ -186,6 +200,15 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
 	int32 NeighborRange = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Params")
+	FRotator HexMeshRot = FRotator(0.0, 30.0, 0.0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Params")
+	float HexMeshOffsetZ = 1.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Params")
+	float HexMeshSize = 100.0;
 
 	//MouseOver
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|MouseOver", meta = (ClampMin = "0"))
@@ -275,8 +298,16 @@ private:
 	void SetVertexColorByLowBlock(int32 Index);
 
 	//Mesh create
+	void CreateCenterVertices();
+	void CreateCenterTriangles();
+
 	void CreateHexGridLineMesh();
 	void SetHexGridLineMaterial();
+
+	void AddTilesInstance();
+	void AddTileInstance(int32 Index);
+	void AddTileInstanceData(int32 TileIndex, int32 InstanceIndex);
+	void AddTileInstanceColor(int32 TileIndex, int32 InstanceIndex);
 
 	//Mouse over
 	Hex PosToHex(const FVector2D& Point, float Size);

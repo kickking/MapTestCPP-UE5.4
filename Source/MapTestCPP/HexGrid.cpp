@@ -10,6 +10,7 @@
 #include <Kismet/GameplayStatics.h>
 #include <Kismet/KismetMathLibrary.h>
 #include <ProceduralMeshComponent.h>
+#include <Components/InstancedStaticMeshComponent.h>
 #include <TimerManager.h>
 
 #include <string>
@@ -20,11 +21,18 @@ DEFINE_LOG_CATEGORY(HexGrid);
 AHexGrid::AHexGrid()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	//PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 
 	HexGridMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("HexGridMesh"));
 	this->SetRootComponent(HexGridMesh);
 	HexGridMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	HexMesh = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("HexMesh"));
+	//HexMesh->SetMobility(EComponentMobility::Static);
+	//this->SetRootComponent(HexMesh);
+	HexMesh->SetupAttachment(RootComponent);
+	HexMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	MouseOverMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("MouseOverMesh"));
 	MouseOverMesh->SetupAttachment(RootComponent);
@@ -87,10 +95,17 @@ void AHexGrid::CreateHexGridFlow()
 	case Enum_HexGridWorkflowState::SetVertexColors:
 		SetVertexColors();
 		break;
+	case Enum_HexGridWorkflowState::CreateCenterVertices:
+		CreateCenterVertices();
+	case Enum_HexGridWorkflowState::CreateCenterTriangles:
+		CreateCenterTriangles();
 	case Enum_HexGridWorkflowState::DrawMesh:
-		CreateHexGridLineMesh();
+		/*CreateHexGridLineMesh();
 		SetHexGridLineMaterial();
-		WorkflowState = Enum_HexGridWorkflowState::Done;
+		WorkflowState = Enum_HexGridWorkflowState::Done;*/
+
+		AddTilesInstance();
+		break;
 	case Enum_HexGridWorkflowState::Done:
 		break;
 	case Enum_HexGridWorkflowState::Error:
@@ -122,6 +137,7 @@ void AHexGrid::InitLoopData()
 	FlowControlUtility::InitLoopData(SetVerticesPosZLoopData);
 	FlowControlUtility::InitLoopData(SetTerrainLowBlockLevelLoopData);
 	FlowControlUtility::InitLoopData(SetVertexColorsLoopData);
+	FlowControlUtility::InitLoopData(AddTilesInstanceLoopData);
 }
 
 void AHexGrid::WaitTerrain()
@@ -712,7 +728,8 @@ void AHexGrid::SetVertexColors()
 	FTimerHandle TimerHandle;
 	if (!bUseBlockVextexColors) {
 		UE_LOG(HexGrid, Log, TEXT("Do not use vertex colors!"));
-		WorkflowState = Enum_HexGridWorkflowState::DrawMesh;
+		//WorkflowState = Enum_HexGridWorkflowState::DrawMesh;
+		WorkflowState = Enum_HexGridWorkflowState::CreateCenterVertices;
 		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, SetVertexColorsLoopData.Rate, false);
 		return;
 	}
@@ -733,7 +750,7 @@ void AHexGrid::SetVertexColors()
 		SetVertexColorByBlockMode(i);
 		Count++;
 	}
-	WorkflowState = Enum_HexGridWorkflowState::DrawMesh;
+	WorkflowState = Enum_HexGridWorkflowState::CreateCenterVertices;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, SetVertexColorsLoopData.Rate, false);
 	UE_LOG(HexGrid, Log, TEXT("Set vertex colors done!"));
 }
@@ -769,6 +786,64 @@ void AHexGrid::SetVertexColorByLowBlock(int32 Index)
 	GridVertexColors.Add(LinearColor);
 }
 
+void AHexGrid::CreateCenterVertices()
+{
+	TArray<FVector> OuterVectors;
+	TArray<FVector> InnerVectors;
+	float Ratio = 1.0 - GridLineRatio;
+
+	FVector Vec(1.0, 0.0, 0.0);
+	FVector ZAxis(0.0, 0.0, 1.0);
+	for (int32 i = 0; i <= 5; i++)
+	{
+		FVector OuterVec = Vec.RotateAngleAxis(i * 60, ZAxis) * TileSize;
+		FVector InnerVec = OuterVec * Ratio;
+		OuterVectors.Add(OuterVec);
+		InnerVectors.Add(InnerVec);
+	}
+
+	for (int32 i = 0; i <= 5; i++)
+	{
+		FVector VecCenter(Tiles[0].Position2D.X, Tiles[0].Position2D.Y, 0);
+		FVector OuterPoint = VecCenter + OuterVectors[i];
+		FVector InnerPoint = VecCenter + InnerVectors[i];
+		GridCenterVertices.Add(OuterPoint);
+		GridCenterVertices.Add(InnerPoint);
+	}
+
+	WorkflowState = Enum_HexGridWorkflowState::CreateCenterTriangles;
+	UE_LOG(HexGrid, Log, TEXT("Create CenterVertices done!"));
+}
+
+void AHexGrid::CreateCenterTriangles()
+{
+	TArray<int32> TriArr0, TriArr1, TriArr2, TriArr3;
+	for (int32 i = 0; i <= 5; i++)
+	{
+		TriArr0.Add(i * 2);
+		TriArr1.Add(i * 2 + 1);
+		int32 a = ((i + 1) % 6) * 2;
+		TriArr2.Add(a);
+		TriArr3.Add(a + 1);
+	}
+
+	TArray<int32> Indices = { 0, 0, 0, 0, 0, 0 };
+	for (int32 i = 0; i <= 5; i++)
+	{
+		Indices[0] = TriArr0[i];
+		Indices[1] = TriArr1[i];
+		Indices[2] = TriArr3[i];
+		Indices[3] = TriArr0[i];
+		Indices[4] = TriArr3[i];
+		Indices[5] = TriArr2[i];
+
+		GridCenterTriangles.Append(Indices);
+	}
+
+	WorkflowState = Enum_HexGridWorkflowState::DrawMesh;
+	UE_LOG(HexGrid, Log, TEXT("Create CenterTriangles done!"));
+}
+
 void AHexGrid::CreateHexGridLineMesh()
 {
 	if (!bShowGrid) {
@@ -785,6 +860,8 @@ void AHexGrid::CreateHexGridLineMesh()
 	else {
 		HexGridMesh->CreateMeshSection(0, GridVertices, GridTriangles, TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
 	}
+
+	//HexGridMesh->CreateMeshSection(0, GridCenterVertices, GridCenterTriangles, TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
 	
 }
 
@@ -796,6 +873,76 @@ void AHexGrid::SetHexGridLineMaterial()
 	else {
 		HexGridMesh->SetMaterial(0, HexGridLineMaterialIns);
 	}
+
+	//HexGridMesh->SetMaterial(0, HexGridLineMaterialIns);
+}
+
+void AHexGrid::AddTilesInstance()
+{
+	if (!bShowGrid) {
+		FTimerHandle TimerHandle;
+		WorkflowState = Enum_HexGridWorkflowState::Done;
+		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
+		UE_LOG(HexGrid, Log, TEXT("Don't show grid!"));
+		return;
+	}
+
+	BlockLevelMax = NeighborRange + 1;
+	HexMesh->NumCustomDataFloats = 3;
+
+	int32 Count = 0;
+	TArray<int32> Indices = { 0 };
+	bool SaveLoopFlag = false;
+
+	int32 i = AddTilesInstanceLoopData.IndexSaved[0];
+	for (; i < Tiles.Num(); i++) {
+		Indices[0] = i;
+		FlowControlUtility::SaveLoopData(this, AddTilesInstanceLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
+		if (SaveLoopFlag) {
+			return;
+		}
+		AddTileInstance(i);
+		Count++;
+	}
+
+	FTimerHandle TimerHandle;
+	WorkflowState = Enum_HexGridWorkflowState::Done;
+	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, AddTilesInstanceLoopData.Rate, false);
+	UE_LOG(HexGrid, Log, TEXT("Add tiles instance done!"));
+
+}
+
+void AHexGrid::AddTileInstance(int32 Index)
+{
+	FStructHexTileData tile = Tiles[Index];
+	if (tile.TerrainLowBlockLevel != 0 && 
+		FMath::Abs<float>(tile.Position2D.X) < Terrain->GetWidth() / 2 && 
+		FMath::Abs<float>(tile.Position2D.Y) < Terrain->GetHeight() / 2) {
+		FVector HexLoc(tile.Position2D.X, tile.Position2D.Y, HexMeshOffsetZ);
+		FVector HexScale(TileSize / HexMeshSize);
+		FTransform HexTransform(HexMeshRot, HexLoc, HexScale);
+		int32 InstanceIndex = HexMesh->AddInstance(HexTransform);
+		AddTileInstanceData(Index, InstanceIndex);
+	}
+}
+
+void AHexGrid::AddTileInstanceData(int32 TileIndex, int32 InstanceIndex)
+{
+	AddTileInstanceColor(TileIndex, InstanceIndex);
+}
+
+void AHexGrid::AddTileInstanceColor(int32 TileIndex, int32 InstanceIndex)
+{
+	int32 Level = Tiles[TileIndex].TerrainLowBlockLevel;
+	int32 LevelMin = 0;
+	if (Level == -1) {
+		Level = BlockLevelMax;
+	}
+
+	float H = 120.0f / float(BlockLevelMax - LevelMin + 1) * float(Level);
+	FLinearColor LinearColor = UKismetMathLibrary::HSVToRGB(H, 1.0, 1.0, 1.0);
+	TArray<float> CustomData = { LinearColor.R, LinearColor.G, LinearColor.B };
+	HexMesh->SetCustomData(InstanceIndex, CustomData, true);
 }
 
 // Called every frame
