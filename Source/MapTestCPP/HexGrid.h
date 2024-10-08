@@ -23,17 +23,17 @@ enum class Enum_HexGridWorkflowState : uint8
 	InitWorkflow,
 	WaitTerrainInit,
 	LoadParams,
-	LoadTiles,
 	LoadTileIndices,
-	LoadVertices,
-	LoadTriangles,
+	LoadTiles,
+	CreateTilesVertices,
 	SetTilesPosZ,
-	SetTilesAvgPosZ,
-	SetVerticesPosZ,
-	SetTerrainLowBlockLevel,
-	SetVertexColors,
-	CreateCenterVertices,
-	CreateCenterTriangles,
+	CalTilesNormal,
+	SetTilesLowBlockLevel,
+	InitCheckTerrainConnection,
+	BreakMaxLowBlockTilesToChunk,
+	CheckChunksConnection,
+	FindTilesIsland,
+	SetTilesPlainLevel,
 	DrawMesh,
 	Done,
 	Error
@@ -71,33 +71,35 @@ private:
 	//Mouse over
 	Hex MouseOverHex;
 
-	//Block Data
-	int32 BlockLevelMax = 0;
+	//Block data
+	int32 LowBlockLevelMax = 0;
+	TSet<int32> MaxLowBlockTileIndices;
+
+	//Create tiles vertices tmp data
+	TArray<FVector> TileVerticesVectors;
+
+	//Hex ISM mesh
+	float HexInstanceScale = 1.0;
+	FVector HexInstMeshUpVec;
+
+	//Plain data
+	int32 PlainLevelMax = 0;
+
+	//Check Terrain connection data
+	TSet<int32> CheckConnectionReached;
+	TArray<TSet<int32>> MaxLowBlockTileChunks;
+	TQueue<int32> CheckConnectionFrontier;
 
 protected:
 	//Mesh
-	UPROPERTY(BlueprintReadOnly)
-	class UProceduralMeshComponent* HexGridMesh;
-	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Custom|HexMesh")
-	class UInstancedStaticMeshComponent* HexMesh;
+	UPROPERTY(VisibleAnywhere, Category = "Custom|HexInstMesh")
+	class UInstancedStaticMeshComponent* HexInstMesh;
 	UPROPERTY(BlueprintReadOnly)
 	class UProceduralMeshComponent* MouseOverMesh;
 
 	//Material
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Material")
-	class UMaterialInstance* HexGridLineMaterialIns;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Material")
-	class UMaterialInstance* HexGridLineVCMaterialIns;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Material")
 	class UMaterialInstance* MouseOverMaterialIns;
-
-	//Vetex Colors
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|VextexColors")
-	bool bUseBlockVextexColors = false;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|VextexColors")
-	FLinearColor LineVertexColor;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|VextexColors")
-	Enum_BlockMode VertexColorsShowMode = Enum_BlockMode::LowBlock;
 
 	//Timer
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Timer")
@@ -108,42 +110,32 @@ protected:
 	FString ParamsDataPath = FString(TEXT("Data/Params.data"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-	FString TilesDataPath = FString(TEXT("Data/Tiles.data"));
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
 	FString TileIndicesDataPath = FString(TEXT("Data/TileIndices.data"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-	FString VerticesDataPath = FString(TEXT("Data/Vertices.data"));
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
-	FString TrianglesDataPath = FString(TEXT("Data/Triangles.data"));
-
-	//Altitude
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Altitude")
-	bool bFitAltitude = false;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Altitude")
-	float AltitudeOffset = 100.0f;
+	FString TilesDataPath = FString(TEXT("Data/Tiles.data"));
 
 	//Loop BP
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-	FStructLoopData LoadTilesLoopData;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
 	FStructLoopData LoadTileIndicesLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-	FStructLoopData LoadVerticesLoopData;
+	FStructLoopData LoadTilesLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-	FStructLoopData LoadTrianglesLoopData;
+	FStructLoopData CreateTilesVerticesLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
 	FStructLoopData SetTilesPosZLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-	FStructLoopData SetTilesAvgPosZLoopData;
+	FStructLoopData CalTilesNormalLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-	FStructLoopData SetVerticesPosZLoopData;
+	FStructLoopData SetTilesLowBlockLevelLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-	FStructLoopData SetTerrainLowBlockLevelLoopData;
+	FStructLoopData BreakMaxLowBlockTilesToChunkLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
-	FStructLoopData SetVertexColorsLoopData;
+	FStructLoopData CheckChunksConnectionLoopData;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
+	FStructLoopData FindTilesIslandLoopData;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
+	FStructLoopData SetTilesPlainLevelLoopData;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
 	FStructLoopData AddTilesInstanceLoopData;
 
@@ -152,19 +144,6 @@ protected:
 	TArray<FStructHexTileData> Tiles;
 	UPROPERTY(BlueprintReadOnly)
 	TMap<FIntPoint, int32> TileIndices;
-
-	//Render variables (Load from data file)
-	UPROPERTY(BlueprintReadOnly)
-	TArray<FVector> GridVertices;
-	UPROPERTY(BlueprintReadOnly)
-	TArray<int32> GridTriangles;
-	UPROPERTY(BlueprintReadOnly)
-	TArray<FLinearColor> GridVertexColors;
-
-	UPROPERTY(BlueprintReadOnly)
-	TArray<FVector> GridCenterVertices;
-	UPROPERTY(BlueprintReadOnly)
-	TArray<int32> GridCenterTriangles;
 
 	UPROPERTY(BlueprintReadOnly)
 	TArray<FVector> MouseOverVertices;
@@ -176,10 +155,10 @@ protected:
 	Enum_HexGridWorkflowState WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
 
 	//Progress
-	UPROPERTY(BlueprintReadOnly)
+	/*UPROPERTY(BlueprintReadOnly)
 	int32 ProgressTarget = 0;
 	UPROPERTY(BlueprintReadOnly)
-	int32 ProgressCurrent = 0;
+	int32 ProgressCurrent = 0;*/
 
 	//common
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Common")
@@ -187,7 +166,7 @@ protected:
 
 	//Params
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Params")
-	int32 ParamNum = 4;
+	int32 ParamNum = 3;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
 	float TileSize = 0.0f;
@@ -196,19 +175,16 @@ protected:
 	int32 GridRange = 10;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-	float GridLineRatio = 0.1f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-	int32 NeighborRange = 10;
+	int32 NeighborRange = 5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-	FRotator HexMeshRot = FRotator(0.0, 30.0, 0.0);
+	FRotator HexInstMeshRot = FRotator(0.0, 30.0, 0.0);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-	float HexMeshOffsetZ = 1.0;
+	float HexInstMeshOffsetZ = 1.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Params")
-	float HexMeshSize = 100.0;
+	float HexInstMeshSize = 100.0;
 
 	//MouseOver
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|MouseOver", meta = (ClampMin = "0"))
@@ -216,8 +192,14 @@ protected:
 
 	//Block
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float TerrainLowBlockRatio = 0.0;
+	float TerrainAltitudeLowBlockRatio = 0.3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float TerrainSlopeLowBlockRatio = 0.3;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float TerrainSlopePlainRatio = 0.1;
+
 public:	
 	// Sets default values for this actor's properties
 	AHexGrid();
@@ -246,68 +228,83 @@ private:
 	void LoadParams(std::ifstream& ifs);
 	bool ParseParams(const FString& line);
 
+	//Load tiles indices data
+	void LoadTileIndicesFromFile();
+	void LoadTileIndices(std::ifstream& ifs);
+	void ParseTileIndexLine(const FString& line);
+
 	//Load tiles data
 	void LoadTilesFromFile();
 	void LoadTiles(std::ifstream& ifs);
 	void ParseTileLine(const FString& line, FStructHexTileData& Data);
+	void ParseIndex(const FString& ValueStr, const FString& KeyStr);
 	void ParseAxialCoord(const FString& Str, FStructHexTileData& Data);
 	void ParsePosition2D(const FString& Str, FStructHexTileData& Data);
 	void ParseNeighbors(const FString& Str, FStructHexTileData& Data);
 	void ParseNeighborInfo(const FString& Str, FStructHexTileNeighbors& Neighbors, int32 Radius);
 	
-	//Load tiles indices data
-	void LoadTileIndicesFromFile();
-	void LoadTileIndices(std::ifstream& ifs);
-	void ParseTileIndexLine(const FString& line);
-	
-	//Load vertices data
-	void LoadVerticesFromFile();
-	void LoadVertices(std::ifstream& ifs);
-	void ParseVerticesLine(const FString& line);
-
-	//Load triangles data
-	void LoadTrianglesFromFile();
-	void LoadTriangles(std::ifstream& ifs);
-	void ParseTrianglesLine(const FString& line);
-
 	//Parse string to other data type
 	void ParseIntPoint(const FString& Str, FIntPoint& Point);
 	void ParseVector2D(const FString& Str, FVector2D& Vec2D);
 	void ParseVector(const FString& Str, FVector& Vec);
 	void ParseInt(const FString& Str, int32& value);
 
+	//Loop Function for all workflow of tiles loop
+	void TilesLoopFunction(TFunction<void()> InitFunc, TFunction<void(int32 LoopIndex)> LoopFunc, 
+		FStructLoopData& LoopData, Enum_HexGridWorkflowState State);
+
+	//Parse tiles vertices
+	void CreateTilesVertices();
+	void InitTileVerticesVertors();
+	void CreateTileVertices(int32 Index);
+
 	//Set tiles PosZ
 	void SetTilesPosZ();
-	void SetTilesAvgPosZ();
-	void SetTilePosZ(FStructHexTileData& Data);
-	void SetTileAvgPosZ(FStructHexTileData& Data);
+	void SetTilePosZ(int32 Index);
+	void SetTileCenterPosZ(FStructHexTileData& Data);
+	void SetTileVerticesPosZ(FStructHexTileData& Data);
 
-	//Set Vertices PosZ
-	void SetVerticesPosZ();
-	void SetVertexPosZ(FVector& Vertex);
+	//Calculate Normal
+	void CalTilesNormal();
+	void InitCalTilesNormal();
+	void CalTileNormal(int32 Index);
+	//void CalTileNormalByNeighbor(FStructHexTileData& Data, int32 Index, FVector& OutNormal);
 
-	//Set block level
-	void SetTerrainLowBlockLevel();
-	void SetTileLowBlockLevel(FStructHexTileData& Data);
-	void SetLowBlockLevelByNeighbors(FStructHexTileData& Data, int32 Index);
+	//Set low block level
+	void SetTilesLowBlockLevel();
+	void InitSetTilesLowBlockLevel();
+	bool SetTileLowBlock(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 BlockLevel);
+	void SetTileLowBlockLevelByNeighbors(int32 Index);
+	bool SetTileLowBlockLevelByNeighbor(FStructHexTileData& Data, int32 Index);
 
-	//Set Vertex Colors
-	void SetVertexColors();
-	void SetVertexColor(const FLinearColor& Color);
-	void SetVertexColorByBlockMode(int32 Index);
-	void SetVertexColorByLowBlock(int32 Index);
+	//Check Terrain connection
+	void CheckTerrainConnection();
+	void InitCheckTerrainConnection();
+	void CheckTerrainConnectionWorkflow();
+	void BreakMaxLowBlockTilesToChunk();
+	void CheckChunksConnection();
+	bool FindTwoChunksConnection(TSet<int32>& ChunkStart, TSet<int32>& ChunkObj);
+	void CheckTerrainConnectionNotPass();
 
-	//Mesh create
-	void CreateCenterVertices();
-	void CreateCenterTriangles();
+	//Find tiles Island
+	void FindTilesIsland();
+	void FindTileIsLand(int32 Index);
+	bool Find_LBLM_By_LBL3(int32 Index);
 
-	void CreateHexGridLineMesh();
-	void SetHexGridLineMaterial();
+	//Set Plain level
+	void SetTilesPlainLevel();
+	void InitSetTilesPlainLevel();
+	bool SetTilePlain(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 PlainLevel);
+	void SetTilePlainLevelByNeighbors(int32 Index);
+	void SetTilePlainLevelByNeighbor(FStructHexTileData& Data, int32 Index);
 
+	//Add Grid tiles ISM
 	void AddTilesInstance();
-	void AddTileInstance(int32 Index);
-	void AddTileInstanceData(int32 TileIndex, int32 InstanceIndex);
-	void AddTileInstanceColor(int32 TileIndex, int32 InstanceIndex);
+	void InitAddTilesInstance();
+	int32 AddTileInstance(FStructHexTileData Data);
+
+	void AddTileInstanceByLowBlock(int32 Index);
+	void AddTileInstanceDataByLowBlock(int32 TileIndex, int32 InstanceIndex);
 
 	//Mouse over
 	Hex PosToHex(const FVector2D& Point, float Size);

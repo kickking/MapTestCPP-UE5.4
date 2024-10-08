@@ -36,6 +36,9 @@ struct FStructHexTileNeighbors
 	int32 Radius;
 
 	UPROPERTY()
+	int32 Count;
+
+	UPROPERTY()
 	TArray<FIntPoint> Tiles;
 };
 
@@ -51,19 +54,37 @@ struct FStructHexTileData
 	FVector2D Position2D;
 
 	UPROPERTY(BlueprintReadOnly)
+	TArray<FVector2D> VerticesPostion2D;
+
+	UPROPERTY(BlueprintReadOnly)
 	float PositionZ;
+
+	UPROPERTY(BlueprintReadOnly)
+	TArray<float> VerticesPositionZ;
 
 	UPROPERTY(BlueprintReadOnly)
 	float AvgPositionZ;
 
 	UPROPERTY(BlueprintReadOnly)
+	FVector Normal;
+
+	UPROPERTY(BlueprintReadOnly)
+	float AngleToUp;
+
+	UPROPERTY(BlueprintReadOnly)
 	TArray<FStructHexTileNeighbors> Neighbors;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 TerrainLowBlockLevel = -1; // -1 means no block
+	int32 TerrainLowBlockLevel;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 TerrainHighBlockLevel = -1; // -1 means no block
+	int32 TerrainHighBlockLevel;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool TerrainIsLand;
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 TerrainPlainLevel;
 };
 
 USTRUCT(BlueprintType)

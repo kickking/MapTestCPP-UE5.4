@@ -18,6 +18,7 @@ FlowControlUtility::~FlowControlUtility()
 
 void FlowControlUtility::InitLoopData(FStructLoopData& InOut_Data)
 {
+	InOut_Data.IndexSaved.Empty();
 	for (int32 i = 0; i < InOut_Data.LoopDepthLimit; i++)
 	{
 		InOut_Data.IndexSaved.Add(0);
