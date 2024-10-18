@@ -379,6 +379,7 @@ void ATerrain::CreateTerrainFlow()
 		CreateWater();
 		WorkflowState = Enum_TerrainWorkflowState::Done;
 	case Enum_TerrainWorkflowState::Done:
+		UE_LOG(Terrain, Log, TEXT("Create terrain done."));
 		break;
 	case Enum_TerrainWorkflowState::Error:
 		UE_LOG(Terrain, Warning, TEXT("CreateTerrainFlow Error!"));
@@ -792,6 +793,8 @@ void ATerrain::CreateTerrainMesh()
 	TerrainMesh->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 	TerrainMesh->SetCollisionObjectType(ECollisionChannel::ECC_WorldStatic);
 	TerrainMesh->bUseComplexAsSimpleCollision = false;
+
+	UE_LOG(Terrain, Log, TEXT("Create terrain mesh done."));
 }
 
 void ATerrain::SetTerrainMaterial()
@@ -807,6 +810,8 @@ void ATerrain::CreateWater()
 			CreateCaustics();
 		}
 	}
+
+	UE_LOG(Terrain, Log, TEXT("Create water done."));
 }
 
 void ATerrain::SetWaterZ()

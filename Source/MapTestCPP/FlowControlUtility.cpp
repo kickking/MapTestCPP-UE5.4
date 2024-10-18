@@ -23,6 +23,8 @@ void FlowControlUtility::InitLoopData(FStructLoopData& InOut_Data)
 	{
 		InOut_Data.IndexSaved.Add(0);
 	}
+	InOut_Data.IsInitialized = false;
+	InOut_Data.Count = 0;
 }
 
 void FlowControlUtility::SaveLoopData(AActor* Owner, FStructLoopData& InOut_Data, int32 Count, const TArray<int32>& Indices,

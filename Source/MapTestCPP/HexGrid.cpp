@@ -55,9 +55,6 @@ void AHexGrid::CreateHexGridFlow()
 	case Enum_HexGridWorkflowState::InitWorkflow:
 		InitWorkflow();
 		break;
-	case Enum_HexGridWorkflowState::WaitTerrainInit:
-		WaitTerrain();
-		break;
 	case Enum_HexGridWorkflowState::LoadParams:
 		LoadParamsFromFile();
 		break;
@@ -67,8 +64,14 @@ void AHexGrid::CreateHexGridFlow()
 	case Enum_HexGridWorkflowState::LoadTiles:
 		LoadTilesFromFile();
 		break;
+	case Enum_HexGridWorkflowState::LoadNeighbors:
+		LoadNeighborsFromFile();
+		break;
 	case Enum_HexGridWorkflowState::CreateTilesVertices:
 		CreateTilesVertices();
+		break;
+	case Enum_HexGridWorkflowState::WaitTerrain:
+		WaitTerrain();
 		break;
 	case Enum_HexGridWorkflowState::SetTilesPosZ:
 		SetTilesPosZ();
@@ -76,19 +79,25 @@ void AHexGrid::CreateHexGridFlow()
 	case Enum_HexGridWorkflowState::CalTilesNormal:
 		CalTilesNormal();
 		break;
-	case Enum_HexGridWorkflowState::SetTilesLowBlockLevel:
-		SetTilesLowBlockLevel();
+	case Enum_HexGridWorkflowState::SetTilesWalkingBlockLevel:
+		SetTilesWalkingBlockLevel();
 		break;
-	case Enum_HexGridWorkflowState::InitCheckTerrainConnection:
-	case Enum_HexGridWorkflowState::BreakMaxLowBlockTilesToChunk:
-	case Enum_HexGridWorkflowState::CheckChunksConnection:
-		CheckTerrainConnection();
+	case Enum_HexGridWorkflowState::SetTilesWalkingBlockLevelEx:
+		SetTilesWalkingBlockLevelEx();
+		break;
+	case Enum_HexGridWorkflowState::InitCheckTerrainWalkingConnection:
+	case Enum_HexGridWorkflowState::BreakMaxWalkingBlockTilesToChunk:
+	case Enum_HexGridWorkflowState::CheckChunksWalkingConnection:
+		CheckTerrainWalkingConnection();
 		break;
 	case Enum_HexGridWorkflowState::FindTilesIsland:
 		FindTilesIsland();
 		break;
-	case Enum_HexGridWorkflowState::SetTilesPlainLevel:
-		SetTilesPlainLevel();
+	case Enum_HexGridWorkflowState::SetTilesBuildingBlockLevel:
+		SetTilesBuildingBlockLevel();
+		break;
+	case Enum_HexGridWorkflowState::SetTilesBuildingBlockLevelEx:
+		SetTilesBuildingBlockLevelEx();
 		break;
 	case Enum_HexGridWorkflowState::DrawMesh:
 		AddTilesInstance();
@@ -108,7 +117,7 @@ void AHexGrid::InitWorkflow()
 	InitLoopData();
 
 	FTimerHandle TimerHandle;
-	WorkflowState = Enum_HexGridWorkflowState::WaitTerrainInit;
+	WorkflowState = Enum_HexGridWorkflowState::LoadParams;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
 	UE_LOG(HexGrid, Log, TEXT("Init workflow done!"));
 }
@@ -117,35 +126,20 @@ void AHexGrid::InitLoopData()
 {
 	FlowControlUtility::InitLoopData(LoadTileIndicesLoopData);
 	FlowControlUtility::InitLoopData(LoadTilesLoopData);
+	FlowControlUtility::InitLoopData(LoadNeighborsLoopData);
+	LoadNeighborsLoopData.IndexSaved[0] = 1;
 	FlowControlUtility::InitLoopData(CreateTilesVerticesLoopData);
+
 	FlowControlUtility::InitLoopData(SetTilesPosZLoopData);
 	FlowControlUtility::InitLoopData(CalTilesNormalLoopData);
-	FlowControlUtility::InitLoopData(SetTilesLowBlockLevelLoopData);
-
-	FlowControlUtility::InitLoopData(BreakMaxLowBlockTilesToChunkLoopData);
-	FlowControlUtility::InitLoopData(CheckChunksConnectionLoopData);
-
+	FlowControlUtility::InitLoopData(SetTilesWalkingBlockLevelLoopData);
+	FlowControlUtility::InitLoopData(SetTilesWalkingBlockLevelExLoopData);
+	FlowControlUtility::InitLoopData(BreakMaxWalkingBlockTilesToChunkLoopData);
 	FlowControlUtility::InitLoopData(FindTilesIslandLoopData);
-	FlowControlUtility::InitLoopData(SetTilesPlainLevelLoopData);
-	FlowControlUtility::InitLoopData(AddTilesInstanceLoopData);
-}
+	FlowControlUtility::InitLoopData(SetTilesBuildingBlockLevelLoopData);
+	FlowControlUtility::InitLoopData(SetTilesBuildingBlockLevelExLoopData);
 
-void AHexGrid::WaitTerrain()
-{
-	FTimerHandle TimerHandle;
-	TArray<AActor*> Out_Actors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATerrain::StaticClass(), Out_Actors);
-	if (Out_Actors.Num() == 1) {
-		Terrain = (ATerrain*)Out_Actors[0];
-		if (Terrain->IsWorkFlowStepDone(Enum_TerrainWorkflowState::InitWorkflow)) {
-			WorkflowState = Enum_HexGridWorkflowState::LoadParams;
-			GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
-			UE_LOG(HexGrid, Log, TEXT("Wait terrain noise done!"));
-			return;
-		}
-	}
-	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
-	return;
+	FlowControlUtility::InitLoopData(AddTilesInstanceLoopData);
 }
 
 bool AHexGrid::GetValidFilePath(const FString& RelPath, FString& FullPath)
@@ -215,124 +209,6 @@ bool AHexGrid::ParseParams(const FString& line)
 	return true;
 }
 
-void AHexGrid::LoadTilesFromFile()
-{
-	FTimerHandle TimerHandle;
-	FString FullPath;
-	if (!GetValidFilePath(TilesDataPath, FullPath)) {
-		UE_LOG(HexGrid, Warning, TEXT("Tiles data file %s not exist!"), *TilesDataPath);
-		WorkflowState = Enum_HexGridWorkflowState::Error;
-		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadTilesLoopData.Rate, false);
-		return;
-	}
-
-	if (!LoadTilesLoopData.IsInitialized) {
-		LoadTilesLoopData.IsInitialized = true;
-		DataLoadStream.open(*FullPath, std::ios::in);
-	}
-
-	if (!DataLoadStream || !DataLoadStream.is_open()) {
-		UE_LOG(HexGrid, Warning, TEXT("Open file %s failed!"), *FullPath);
-		WorkflowState = Enum_HexGridWorkflowState::Error;
-		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadTilesLoopData.Rate, false);
-		return;
-	}
-
-	LoadTiles(DataLoadStream);
-}
-
-void AHexGrid::LoadTiles(std::ifstream& ifs)
-{
-	int32 Count = 0;
-	TArray<int32> Indices = { 0 };
-	bool SaveLoopFlag = false;
-
-	std::string line;
-	while (std::getline(ifs, line))
-	{
-		FString fline(line.c_str());
-		FStructHexTileData Data;
-		ParseTileLine(fline, Data);
-		Tiles.Add(Data);
-		Count++;
-
-		FlowControlUtility::SaveLoopData(this, LoadTilesLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
-		if (SaveLoopFlag) {
-			return;
-		}
-	}
-
-	ifs.close();
-	FTimerHandle TimerHandle;
-	WorkflowState = Enum_HexGridWorkflowState::CreateTilesVertices;
-	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadTilesLoopData.Rate, false);
-	UE_LOG(HexGrid, Log, TEXT("Load tiles done!"));
-}
-
-void AHexGrid::ParseTileLine(const FString& line, FStructHexTileData& Data)
-{
-	TArray<FString> StrArr;
-	line.ParseIntoArray(StrArr, *PipeDelim, true);
-	/*ParseIndex(StrArr[0], StrArr[1]);
-	ParseAxialCoord(StrArr[1], Data);
-	ParsePosition2D(StrArr[2], Data);
-	ParseNeighbors(StrArr[3], Data);*/
-
-	ParseAxialCoord(StrArr[0], Data);
-	ParsePosition2D(StrArr[1], Data);
-	ParseNeighbors(StrArr[2], Data);
-}
-
-void AHexGrid::ParseIndex(const FString& ValueStr, const FString& KeyStr)
-{
-	FIntPoint key;
-	int32 value;
-	ParseIntPoint(KeyStr, key);
-	ParseInt(ValueStr, value);
-	TileIndices.Add(key, value);
-}
-
-
-void AHexGrid::ParseAxialCoord(const FString& Str, FStructHexTileData& Data)
-{
-	ParseIntPoint(Str, Data.AxialCoord);
-}
-
-void AHexGrid::ParsePosition2D(const FString& Str, FStructHexTileData& Data)
-{
-	ParseVector2D(Str, Data.Position2D);
-}
-
-void AHexGrid::ParseNeighbors(const FString& Str, FStructHexTileData& Data)
-{
-	TArray<FString> StrArr;
-	Str.ParseIntoArray(StrArr, *ColonDelim, true);
-	for (int32 i = 0; i < StrArr.Num(); i++)
-	{
-		FStructHexTileNeighbors Neighbors;
-		ParseNeighborInfo(StrArr[i], Neighbors, i + 1);
-		Data.Neighbors.Add(Neighbors);
-	}
-}
-
-void AHexGrid::ParseNeighborInfo(const FString& Str, FStructHexTileNeighbors& Neighbors, int32 Radius)
-{
-	Neighbors.Radius = Radius;
-	int32 Count = 0;
-	TArray<FString> StrArr;
-	Str.ParseIntoArray(StrArr, *SpaceDelim, true);
-	for (int32 i = 0; i < StrArr.Num(); i++)
-	{
-		FIntPoint Point;
-		ParseIntPoint(StrArr[i], Point);
-		if (TileIndices.Contains(Point)) {
-			Neighbors.Tiles.Add(Point);
-			Count++;
-		}
-	}
-	Neighbors.Count = Count;
-}
-
 void AHexGrid::LoadTileIndicesFromFile()
 {
 	FTimerHandle TimerHandle;
@@ -397,6 +273,184 @@ void AHexGrid::ParseTileIndexLine(const FString& line)
 
 }
 
+void AHexGrid::LoadTilesFromFile()
+{
+	FTimerHandle TimerHandle;
+	FString FullPath;
+	if (!GetValidFilePath(TilesDataPath, FullPath)) {
+		UE_LOG(HexGrid, Warning, TEXT("Tiles data file %s not exist!"), *TilesDataPath);
+		WorkflowState = Enum_HexGridWorkflowState::Error;
+		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadTilesLoopData.Rate, false);
+		return;
+	}
+
+	if (!LoadTilesLoopData.IsInitialized) {
+		LoadTilesLoopData.IsInitialized = true;
+		DataLoadStream.open(*FullPath, std::ios::in);
+	}
+
+	if (!DataLoadStream || !DataLoadStream.is_open()) {
+		UE_LOG(HexGrid, Warning, TEXT("Open file %s failed!"), *FullPath);
+		WorkflowState = Enum_HexGridWorkflowState::Error;
+		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadTilesLoopData.Rate, false);
+		return;
+	}
+
+	LoadTiles(DataLoadStream);
+}
+
+void AHexGrid::LoadTiles(std::ifstream& ifs)
+{
+	int32 Count = 0;
+	TArray<int32> Indices = { 0 };
+	bool SaveLoopFlag = false;
+
+	std::string line;
+	while (std::getline(ifs, line))
+	{
+		FString fline(line.c_str());
+		FStructHexTileData Data;
+		ParseTileLine(fline, Data);
+		Tiles.Add(Data);
+		Count++;
+
+		FlowControlUtility::SaveLoopData(this, LoadTilesLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
+		if (SaveLoopFlag) {
+			return;
+		}
+	}
+
+	ifs.close();
+	FTimerHandle TimerHandle;
+	WorkflowState = Enum_HexGridWorkflowState::LoadNeighbors;
+	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadTilesLoopData.Rate, false);
+	UE_LOG(HexGrid, Log, TEXT("Load tiles done!"));
+}
+
+void AHexGrid::ParseTileLine(const FString& line, FStructHexTileData& Data)
+{
+	TArray<FString> StrArr;
+	line.ParseIntoArray(StrArr, *PipeDelim, true);
+	ParseAxialCoord(StrArr[0], Data);
+	ParsePosition2D(StrArr[1], Data);
+}
+
+void AHexGrid::ParseIndex(const FString& ValueStr, const FString& KeyStr)
+{
+	FIntPoint key;
+	int32 value;
+	ParseIntPoint(KeyStr, key);
+	ParseInt(ValueStr, value);
+	TileIndices.Add(key, value);
+}
+
+void AHexGrid::ParseAxialCoord(const FString& Str, FStructHexTileData& Data)
+{
+	ParseIntPoint(Str, Data.AxialCoord);
+}
+
+void AHexGrid::ParsePosition2D(const FString& Str, FStructHexTileData& Data)
+{
+	ParseVector2D(Str, Data.Position2D);
+}
+
+void AHexGrid::LoadNeighborsFromFile()
+{
+	int32 i = LoadNeighborsLoopData.IndexSaved[0];
+	FTimerHandle TimerHandle;
+
+	for (; i <= NeighborRange; i++)
+	{
+		FString NeighborPath;
+		FString FullPath;
+		CreateNeighborPath(NeighborPath, i);
+
+		if (!GetValidFilePath(NeighborPath, FullPath)) {
+			UE_LOG(HexGrid, Warning, TEXT("Neighbor path file %s not exist!"), *NeighborPath);
+			WorkflowState = Enum_HexGridWorkflowState::Error;
+			GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadNeighborsLoopData.Rate, false);
+			return;
+		}
+
+		if (!LoadNeighborsLoopData.IsInitialized) {
+			LoadNeighborsLoopData.IsInitialized = true;
+			DataLoadStream.open(*FullPath, std::ios::in);
+		}
+
+		if (!DataLoadStream || !DataLoadStream.is_open()) {
+			UE_LOG(HexGrid, Warning, TEXT("Open file %s failed!"), *FullPath);
+			WorkflowState = Enum_HexGridWorkflowState::Error;
+			GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadNeighborsLoopData.Rate, false);
+			return;
+		}
+		if (!LoadNeighbors(DataLoadStream, i)) {
+			return;
+		}
+	}
+
+	WorkflowState = Enum_HexGridWorkflowState::CreateTilesVertices;
+	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoadNeighborsLoopData.Rate, false);
+	UE_LOG(HexGrid, Log, TEXT("Load neighbors done!"));
+}
+
+void AHexGrid::CreateNeighborPath(FString& NeighborPath, int32 Radius)
+{
+	NeighborPath.Append(NeighborsDataPathPrefix).Append(FString::FromInt(Radius)).Append(FString(TEXT(".data")));
+}
+
+bool AHexGrid::LoadNeighbors(std::ifstream& ifs, int32 Radius)
+{
+	int32 Count = 0;
+	TArray<int32> Indices = { Radius, 0 };
+	bool SaveLoopFlag = false;
+
+	int32 i = LoadNeighborsLoopData.IndexSaved[1];
+	std::string line;
+	while (std::getline(ifs, line))
+	{
+		FString fline(line.c_str());
+		ParseNeighborsLine(fline, i, Radius);
+		i++;
+		Count++;
+		Indices[1] = i;
+		FlowControlUtility::SaveLoopData(this, LoadNeighborsLoopData, Count * Radius, Indices, WorkflowDelegate, SaveLoopFlag);
+		if (SaveLoopFlag) {
+			return false;
+		}
+	}
+
+	ifs.close();
+	FlowControlUtility::InitLoopData(LoadNeighborsLoopData);
+	LoadNeighborsLoopData.IndexSaved[0] = Radius;
+	UE_LOG(HexGrid, Log, TEXT("Load neighbor N%d done!"), Radius);
+	return true;
+}
+
+void AHexGrid::ParseNeighborsLine(const FString& Str, int32 Index, int32 Radius)
+{
+	ParseNeighbors(Str, Index, Radius);
+}
+
+void AHexGrid::ParseNeighbors(const FString& Str, int32 Index, int32 Radius)
+{
+	FStructHexTileNeighbors Neighbors;
+	Neighbors.Radius = Radius;
+	int32 Count = 0;
+	TArray<FString> StrArr;
+	Str.ParseIntoArray(StrArr, *SpaceDelim, true);
+	for (int32 i = 0; i < StrArr.Num(); i++)
+	{
+		FIntPoint Point;
+		ParseIntPoint(StrArr[i], Point);
+		if (TileIndices.Contains(Point)) {
+			Neighbors.Tiles.Add(Point);
+			Count++;
+		}
+	}
+	Neighbors.Count = Count;
+	Tiles[Index].Neighbors.Add(Neighbors);
+}
+
 void AHexGrid::ParseIntPoint(const FString& Str, FIntPoint& Point)
 {
 	TArray<FString> StrArr;
@@ -427,7 +481,7 @@ void AHexGrid::ParseInt(const FString& Str, int32& value)
 	value = UKismetStringLibrary::Conv_StringToInt(Str);
 }
 
-void AHexGrid::TilesLoopFunction(TFunction<void()> InitFunc, TFunction<void(int32 LoopIndex)> LoopFunc,
+bool AHexGrid::TilesLoopFunction(TFunction<void()> InitFunc, TFunction<void(int32 LoopIndex)> LoopFunc,
 	FStructLoopData& LoopData, Enum_HexGridWorkflowState State)
 {
 	int32 Count = 0;
@@ -444,7 +498,7 @@ void AHexGrid::TilesLoopFunction(TFunction<void()> InitFunc, TFunction<void(int3
 		Indices[0] = i;
 		FlowControlUtility::SaveLoopData(this, LoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
 		if (SaveLoopFlag) {
-			return;
+			return false;
 		}
 		LoopFunc(i);
 		Count++;
@@ -453,13 +507,15 @@ void AHexGrid::TilesLoopFunction(TFunction<void()> InitFunc, TFunction<void(int3
 	FTimerHandle TimerHandle;
 	WorkflowState = State;
 	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, LoopData.Rate, false);
+	return true;
 }
 
 void AHexGrid::CreateTilesVertices()
 {
-	TilesLoopFunction([this]() { InitTileVerticesVertors(); }, [this](int32 i) { CreateTileVertices(i); }, 
-		CreateTilesVerticesLoopData, Enum_HexGridWorkflowState::SetTilesPosZ);
-	UE_LOG(HexGrid, Log, TEXT("Parse tiles vertices done!"));
+	if (TilesLoopFunction([this]() { InitTileVerticesVertors(); }, [this](int32 i) { CreateTileVertices(i); },
+		CreateTilesVerticesLoopData, Enum_HexGridWorkflowState::WaitTerrain)) {
+		UE_LOG(HexGrid, Log, TEXT("Parse tiles vertices done!"));
+	}
 }
 
 void AHexGrid::InitTileVerticesVertors()
@@ -482,12 +538,30 @@ void AHexGrid::CreateTileVertices(int32 Index)
 	}
 }
 
+void AHexGrid::WaitTerrain()
+{
+	FTimerHandle TimerHandle;
+	TArray<AActor*> Out_Actors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ATerrain::StaticClass(), Out_Actors);
+	if (Out_Actors.Num() == 1) {
+		Terrain = (ATerrain*)Out_Actors[0];
+		if (Terrain->IsWorkFlowStepDone(Enum_TerrainWorkflowState::InitWorkflow)) {
+			WorkflowState = Enum_HexGridWorkflowState::SetTilesPosZ;
+			GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
+			UE_LOG(HexGrid, Log, TEXT("Wait terrain noise done!"));
+			return;
+		}
+	}
+	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
+	return;
+}
+
 void AHexGrid::SetTilesPosZ()
 {
-	TilesLoopFunction(nullptr, [this](int32 i) { SetTilePosZ(i); },
-		SetTilesPosZLoopData, Enum_HexGridWorkflowState::CalTilesNormal);
-	UE_LOG(HexGrid, Log, TEXT("Set tiles pos z done!"));
-
+	if (TilesLoopFunction(nullptr, [this](int32 i) { SetTilePosZ(i); },
+		SetTilesPosZLoopData, Enum_HexGridWorkflowState::CalTilesNormal)) {
+		UE_LOG(HexGrid, Log, TEXT("Set tiles pos z done!"));
+	}
 }
 
 void AHexGrid::SetTilePosZ(int32 Index)
@@ -514,10 +588,10 @@ void AHexGrid::SetTileVerticesPosZ(FStructHexTileData& Data)
 
 void AHexGrid::CalTilesNormal()
 {
-	TilesLoopFunction([this]() { InitCalTilesNormal(); }, [this](int32 i) { CalTileNormal(i); },
-		CalTilesNormalLoopData, Enum_HexGridWorkflowState::SetTilesLowBlockLevel);
-
-	UE_LOG(HexGrid, Log, TEXT("Calculate tiles normal done!"));
+	if (TilesLoopFunction([this]() { InitCalTilesNormal(); }, [this](int32 i) { CalTileNormal(i); },
+		CalTilesNormalLoopData, Enum_HexGridWorkflowState::SetTilesWalkingBlockLevel)) {
+		UE_LOG(HexGrid, Log, TEXT("Calculate tiles normal done!"));
+	}
 }
 
 void AHexGrid::InitCalTilesNormal()
@@ -544,49 +618,49 @@ void AHexGrid::CalTileNormal(int32 Index)
 
 }
 
-void AHexGrid::SetTilesLowBlockLevel()
+void AHexGrid::SetTilesWalkingBlockLevel()
 {
-	TilesLoopFunction([this]() { InitSetTilesLowBlockLevel(); }, [this](int32 i) { SetTileLowBlockLevelByNeighbors(i); },
-		SetTilesLowBlockLevelLoopData, Enum_HexGridWorkflowState::InitCheckTerrainConnection);
-	
-	UE_LOG(HexGrid, Log, TEXT("Set tiles low block level done!"));
-
+	if (TilesLoopFunction([this]() { InitSetTilesWalkingBlockLevel(); }, [this](int32 i) { SetTileWalkingBlockLevelByNeighbors(i); },
+		SetTilesWalkingBlockLevelLoopData, Enum_HexGridWorkflowState::SetTilesWalkingBlockLevelEx)) {
+		UE_LOG(HexGrid, Log, TEXT("Set tiles walking block level done!"));
+	}
 }
 
-void AHexGrid::InitSetTilesLowBlockLevel()
+void AHexGrid::InitSetTilesWalkingBlockLevel()
 {
-	LowBlockLevelMax = NeighborRange + 1;
+	WalkingBlockLevelMax = NeighborRange + 1;
 }
 
-bool AHexGrid::SetTileLowBlock(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 BlockLevel)
+bool AHexGrid::SetTileWalkingBlock(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 BlockLevel)
 {
-	if (CheckData.AvgPositionZ > TerrainAltitudeLowBlockRatio * Terrain->GetTileAltitudeMultiplier()
+	if (FMath::Abs<float>(CheckData.Position2D.X) > Terrain->GetWidth() / 2 
+		|| FMath::Abs<float>(CheckData.Position2D.Y) > Terrain->GetHeight() / 2 
+		|| CheckData.AvgPositionZ > WalkingBlockAltitudeRatio * Terrain->GetTileAltitudeMultiplier()
 		|| CheckData.AvgPositionZ < Terrain->GetWaterBase()
-		|| CheckData.AngleToUp > (PI * TerrainSlopeLowBlockRatio / 2.0)) {
-		Data.TerrainLowBlockLevel = BlockLevel;
+		|| CheckData.AngleToUp > (PI * WalkingBlockSlopeRatio / 2.0)) {
+		Data.TerrainWalkingBlockLevel = BlockLevel;
 		return true;
 	}
 	return false;
 }
 
-void AHexGrid::SetTileLowBlockLevelByNeighbors(int32 Index)
+void AHexGrid::SetTileWalkingBlockLevelByNeighbors(int32 Index)
 {
 	FStructHexTileData& Data = Tiles[Index];
-	if (SetTileLowBlock(Data, Data, 0)) {
+	if (SetTileWalkingBlock(Data, Data, 0)) {
 		return;
 	}
 
 	for (int32 i = 0; i < Data.Neighbors.Num(); i++)
 	{
-		if (SetTileLowBlockLevelByNeighbor(Data, i)) {
+		if (SetTileWalkingBlockLevelByNeighbor(Data, i)) {
 			return;
 		}
 	}
-	Data.TerrainLowBlockLevel = LowBlockLevelMax;
-	MaxLowBlockTileIndices.Add(Index);
+	Data.TerrainWalkingBlockLevel = WalkingBlockLevelMax;
 }
 
-bool AHexGrid::SetTileLowBlockLevelByNeighbor(FStructHexTileData& Data, int32 Index)
+bool AHexGrid::SetTileWalkingBlockLevelByNeighbor(FStructHexTileData& Data, int32 Index)
 {
 	FStructHexTileNeighbors Neighbors = Data.Neighbors[Index];
 	int32 TileIndex;
@@ -598,7 +672,7 @@ bool AHexGrid::SetTileLowBlockLevelByNeighbor(FStructHexTileData& Data, int32 In
 		}
 		
 		TileIndex = TileIndices[key];
-		if (SetTileLowBlock(Data, Tiles[TileIndex], Neighbors.Radius))
+		if (SetTileWalkingBlock(Data, Tiles[TileIndex], Neighbors.Radius))
 		{
 			return true;
 		}
@@ -606,61 +680,95 @@ bool AHexGrid::SetTileLowBlockLevelByNeighbor(FStructHexTileData& Data, int32 In
 	return false;
 }
 
-void AHexGrid::CheckTerrainConnection()
+void AHexGrid::SetTilesWalkingBlockLevelEx()
 {
-	CheckTerrainConnectionWorkflow();
+	if (TilesLoopFunction([this]() { InitSetTilesWalkingBlockLevelEx(); }, [this](int32 i) { SetTileWalkingBlockLevelByNeighborsEx(i); },
+		SetTilesWalkingBlockLevelExLoopData, Enum_HexGridWorkflowState::InitCheckTerrainWalkingConnection)) {
+		UE_LOG(HexGrid, Log, TEXT("Set tiles walking block level extension done!"));
+	}
 }
 
-void AHexGrid::CheckTerrainConnectionWorkflow()
+void AHexGrid::InitSetTilesWalkingBlockLevelEx()
+{
+	WalkingBlockLevelMax = NeighborRange * 2 + 1;
+}
+
+void AHexGrid::SetTileWalkingBlockLevelByNeighborsEx(int32 Index)
+{
+	FStructHexTileData& Data = Tiles[Index];
+
+	if (Data.TerrainWalkingBlockLevel == (NeighborRange + 1)) {
+		FStructHexTileNeighbors OutSideNeighbors = Data.Neighbors[Data.Neighbors.Num() - 1];
+		int32 BlockLvMin = WalkingBlockLevelMax;
+		int32 CurrentBlockLv = Data.TerrainWalkingBlockLevel;
+		for (int32 i = 0; i < OutSideNeighbors.Count; i++)
+		{
+			CurrentBlockLv = NeighborRange + Tiles[TileIndices[OutSideNeighbors.Tiles[i]]].TerrainWalkingBlockLevel;
+			if (CurrentBlockLv < BlockLvMin) {
+				BlockLvMin = CurrentBlockLv;
+			}
+		}
+		Data.TerrainWalkingBlockLevel = BlockLvMin;
+		if (Data.TerrainWalkingBlockLevel == WalkingBlockLevelMax) {
+			MaxWalkingBlockTileIndices.Add(Index);
+		}
+	}
+}
+
+void AHexGrid::CheckTerrainWalkingConnection()
+{
+	CheckTerrainWalkingConnectionWorkflow();
+}
+
+void AHexGrid::CheckTerrainWalkingConnectionWorkflow()
 {
 	switch (WorkflowState)
 	{
-	case Enum_HexGridWorkflowState::InitCheckTerrainConnection:
-		InitCheckTerrainConnection();
-		WorkflowState = Enum_HexGridWorkflowState::BreakMaxLowBlockTilesToChunk;
-	case Enum_HexGridWorkflowState::BreakMaxLowBlockTilesToChunk:
-		BreakMaxLowBlockTilesToChunk();
+	case Enum_HexGridWorkflowState::InitCheckTerrainWalkingConnection:
+		InitCheckTerrainWalkingConnection();
+		WorkflowState = Enum_HexGridWorkflowState::BreakMaxWalkingBlockTilesToChunk;
+	case Enum_HexGridWorkflowState::BreakMaxWalkingBlockTilesToChunk:
+		BreakMaxWalkingBlockTilesToChunk();
 		break;
-	case Enum_HexGridWorkflowState::CheckChunksConnection:
-		CheckChunksConnection();
+	case Enum_HexGridWorkflowState::CheckChunksWalkingConnection:
+		CheckChunksWalkingConnection();
 		break;
 	default:
 		break;
 	}
 }
 
-void AHexGrid::InitCheckTerrainConnection()
+void AHexGrid::InitCheckTerrainWalkingConnection()
 {
-	MaxLowBlockTileChunks.Empty();
+	MaxWalkingBlockTileChunks.Empty();
 }
 
-void AHexGrid::BreakMaxLowBlockTilesToChunk()
+void AHexGrid::BreakMaxWalkingBlockTilesToChunk()
 {
-	
 	int32 Count = 0;
 	TArray<int32> Indices = {};
 	bool SaveLoopFlag = false;
 
-	while (!MaxLowBlockTileIndices.IsEmpty()) 
+	while (!MaxWalkingBlockTileIndices.IsEmpty()) 
 	{
-		if (CheckConnectionFrontier.IsEmpty()) {
-			CheckConnectionReached.Empty();
-			TArray<int32> arr = MaxLowBlockTileIndices.Array();
-			CheckConnectionFrontier.Enqueue(arr[0]);
-			MaxLowBlockTileIndices.Remove(arr[0]);
+		if (CheckWalkingConnectionFrontier.IsEmpty()) {
+			CheckWalkingConnectionReached.Empty();
+			TArray<int32> arr = MaxWalkingBlockTileIndices.Array();
+			CheckWalkingConnectionFrontier.Enqueue(arr[0]);
+			MaxWalkingBlockTileIndices.Remove(arr[0]);
 
-			CheckConnectionReached.Add(arr[0]);
+			CheckWalkingConnectionReached.Add(arr[0]);
 		}
 		
-		while (!CheckConnectionFrontier.IsEmpty())
+		while (!CheckWalkingConnectionFrontier.IsEmpty())
 		{
-			FlowControlUtility::SaveLoopData(this, BreakMaxLowBlockTilesToChunkLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
+			FlowControlUtility::SaveLoopData(this, BreakMaxWalkingBlockTilesToChunkLoopData, Count, Indices, WorkflowDelegate, SaveLoopFlag);
 			if (SaveLoopFlag) {
 				return;
 			}
 
 			int32 current;
-			CheckConnectionFrontier.Dequeue(current);
+			CheckWalkingConnectionFrontier.Dequeue(current);
 
 			FStructHexTileNeighbors Neighbors = Tiles[current].Neighbors[0];
 			for (int32 i = 0; i < Neighbors.Tiles.Num(); i++) {
@@ -668,49 +776,56 @@ void AHexGrid::BreakMaxLowBlockTilesToChunk()
 				if (!TileIndices.Contains(key)) {
 					continue;
 				}
-				if (!CheckConnectionReached.Contains(TileIndices[key])
-					&& Tiles[TileIndices[key]].TerrainLowBlockLevel == LowBlockLevelMax 
-					&& MaxLowBlockTileIndices.Contains(TileIndices[key])) {
-					CheckConnectionFrontier.Enqueue(TileIndices[key]);
-					CheckConnectionReached.Add(TileIndices[key]);
-					MaxLowBlockTileIndices.Remove(TileIndices[key]);
+				if (!CheckWalkingConnectionReached.Contains(TileIndices[key])
+					&& MaxWalkingBlockTileIndices.Contains(TileIndices[key])) {
+					CheckWalkingConnectionFrontier.Enqueue(TileIndices[key]);
+					CheckWalkingConnectionReached.Add(TileIndices[key]);
+					MaxWalkingBlockTileIndices.Remove(TileIndices[key]);
 				}
 			}
 
 			Count++;
 		}
-		MaxLowBlockTileChunks.Add(CheckConnectionReached);
+		MaxWalkingBlockTileChunks.Add(CheckWalkingConnectionReached);
 	}
 
 	FTimerHandle TimerHandle;
-	WorkflowState = Enum_HexGridWorkflowState::CheckChunksConnection;
-	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, BreakMaxLowBlockTilesToChunkLoopData.Rate, false);
-	UE_LOG(HexGrid, Log, TEXT("Break Max LowBlock Tiles To Chunk done!"));
+	WorkflowState = Enum_HexGridWorkflowState::CheckChunksWalkingConnection;
+	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, BreakMaxWalkingBlockTilesToChunkLoopData.Rate, false);
+	UE_LOG(HexGrid, Log, TEXT("MaxWalkingBlockTileChunks Num=%d"), MaxWalkingBlockTileChunks.Num());
+	UE_LOG(HexGrid, Log, TEXT("Break Max Walking Block Tiles To Chunk done!"));
 }
 
-void AHexGrid::CheckChunksConnection()
+void AHexGrid::CheckChunksWalkingConnection()
 {
-	MaxLowBlockTileChunks.Sort([](const TSet<int32>& A, const TSet<int32>& B) {
+	FTimerHandle TimerHandle;
+
+	MaxWalkingBlockTileChunks.Sort([](const TSet<int32>& A, const TSet<int32>& B) {
 		return A.Num() > B.Num();
 	});
-	TSet<int32> objChunk = MaxLowBlockTileChunks[0];
+	if (MaxWalkingBlockTileChunks.IsEmpty()) {
+		UE_LOG(HexGrid, Warning, TEXT("MaxWalkingBlockTileChunks is empty!"));
+		WorkflowState = Enum_HexGridWorkflowState::Error;
+		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
+		return;
+	}
+	TSet<int32> objChunk = MaxWalkingBlockTileChunks[0];
 	
-	for (int32 i = 1; i < MaxLowBlockTileChunks.Num(); i++) {
-		if (!FindTwoChunksConnection(MaxLowBlockTileChunks[i], objChunk)) {
-			CheckTerrainConnectionNotPass();
-			return;
+	for (int32 i = 1; i < MaxWalkingBlockTileChunks.Num(); i++) {
+		if (!FindTwoChunksWalkingConnection(MaxWalkingBlockTileChunks[i], objChunk)) {
+			CheckTerrainWalkingConnectionNotPass(i);
+			continue;
 		}
-		objChunk.Append(MaxLowBlockTileChunks[i]);
+		objChunk.Append(MaxWalkingBlockTileChunks[i]);
 	}
 	
-	FTimerHandle TimerHandle;
 	WorkflowState = Enum_HexGridWorkflowState::FindTilesIsland;
-	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, CheckChunksConnectionLoopData.Rate, false);
-	UE_LOG(HexGrid, Log, TEXT("Check Chunks Connection done!"));
-	UE_LOG(HexGrid, Log, TEXT("Check Terrain Connection pass!"));
+	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
+	UE_LOG(HexGrid, Log, TEXT("Check Chunks Walking Connection done!"));
+	UE_LOG(HexGrid, Log, TEXT("Check Terrain Walking Connection pass!"));
 }
 
-bool AHexGrid::FindTwoChunksConnection(TSet<int32>& ChunkStart, TSet<int32>& ChunkObj)
+bool AHexGrid::FindTwoChunksWalkingConnection(TSet<int32>& ChunkStart, TSet<int32>& ChunkObj)
 {
 	int32 StartIndex = ChunkStart.Array()[0];
 	
@@ -733,7 +848,7 @@ bool AHexGrid::FindTwoChunksConnection(TSet<int32>& ChunkStart, TSet<int32>& Chu
 				continue;
 			}
 			if (!reached.Contains(TileIndices[key]) 
-				&& Tiles[TileIndices[key]].TerrainLowBlockLevel >= 3) {
+				&& Tiles[TileIndices[key]].TerrainWalkingBlockLevel >= 3) {
 				frontier.Enqueue(TileIndices[key]);
 				reached.Add(TileIndices[key]);
 			}
@@ -742,44 +857,47 @@ bool AHexGrid::FindTwoChunksConnection(TSet<int32>& ChunkStart, TSet<int32>& Chu
 	return false;
 }
 
-void AHexGrid::CheckTerrainConnectionNotPass()
+void AHexGrid::CheckTerrainWalkingConnectionNotPass(int32 ChunkIndex)
 {
-	TerrainAltitudeLowBlockRatio += 0.1;
-	TerrainSlopeLowBlockRatio += 0.1;
-
-	InitLoopData();
-	FTimerHandle TimerHandle;
-	WorkflowState = Enum_HexGridWorkflowState::SetTilesLowBlockLevel;
-	GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, CheckChunksConnectionLoopData.Rate, false);
-	UE_LOG(HexGrid, Log, TEXT("Check Chunks Connection done!"));
-	UE_LOG(HexGrid, Warning, TEXT("Check Terrain Connection not pass!"));
+	TSet<int32> Cks = MaxWalkingBlockTileChunks[ChunkIndex];
+	TArray<int32> CksArray = Cks.Array();
+	for (int32 i : CksArray) {
+		Tiles[i].TerrainWalkingConnection = false;
+	}
 }
 
 void AHexGrid::FindTilesIsland()
 {
-	TilesLoopFunction(nullptr, [this](int32 i) { FindTileIsLand(i); },
-		FindTilesIslandLoopData, Enum_HexGridWorkflowState::SetTilesPlainLevel);
-	UE_LOG(HexGrid, Log, TEXT("Find tiles island done!"));
+	if (TilesLoopFunction(nullptr, [this](int32 i) { FindTileIsLand(i); },
+		FindTilesIslandLoopData, Enum_HexGridWorkflowState::SetTilesBuildingBlockLevel)) {
+		UE_LOG(HexGrid, Log, TEXT("Find tiles island done!"));
+	}
 }
 
 void AHexGrid::FindTileIsLand(int32 Index)
 {
 	FStructHexTileData& Data = Tiles[Index];
-	if (Data.TerrainLowBlockLevel == LowBlockLevelMax) {
-		Data.TerrainIsLand = false;
+	if (Data.TerrainWalkingBlockLevel == WalkingBlockLevelMax) {
+		if (Data.TerrainWalkingConnection) {
+			Data.TerrainIsLand = false;
+		}
+		else {
+			Data.TerrainIsLand = true;
+		}
+		
 	}
-	else if (Data.TerrainLowBlockLevel < LowBlockLevelMax && Data.TerrainLowBlockLevel >= 3) {
+	else if (Data.TerrainWalkingBlockLevel < WalkingBlockLevelMax && Data.TerrainWalkingBlockLevel >= 3) {
 		Data.TerrainIsLand = !Find_LBLM_By_LBL3(Index);
 	}
-	else if (Data.TerrainLowBlockLevel < 3 && Data.TerrainLowBlockLevel >= 1) {
-		for (int32 i = Data.TerrainLowBlockLevel; i > 0; i--) {
+	else if (Data.TerrainWalkingBlockLevel < 3 && Data.TerrainWalkingBlockLevel >= 1) {
+		for (int32 i = Data.TerrainWalkingBlockLevel; i > 0; i--) {
 			FStructHexTileNeighbors Neighbors = Data.Neighbors[2 - i];
 			for (int32 j = 0; j < Neighbors.Tiles.Num(); j++) {
 				FIntPoint key = Neighbors.Tiles[j];
 				if (!TileIndices.Contains(key)) {
 					continue;
 				}
-				if (Tiles[TileIndices[key]].TerrainLowBlockLevel == 3) {
+				if (Tiles[TileIndices[key]].TerrainWalkingBlockLevel == 3) {
 					if (Find_LBLM_By_LBL3(TileIndices[key])) {
 						Data.TerrainIsLand = false;
 						return;
@@ -792,10 +910,9 @@ void AHexGrid::FindTileIsLand(int32 Index)
 	else {
 		Data.TerrainIsLand = true;
 	}
-	
 }
 
-/*Find LowBlockLevelMax tile by LowBlockLevel=3 tile*/
+/*Find WalkingBlockLevelMax tile by WalkingBlockLevel=3 tile*/
 bool AHexGrid::Find_LBLM_By_LBL3(int32 Index)
 {
 	TQueue<int32> frontier;
@@ -807,8 +924,14 @@ bool AHexGrid::Find_LBLM_By_LBL3(int32 Index)
 	{
 		int32 current;
 		frontier.Dequeue(current);
-		if (Tiles[current].TerrainLowBlockLevel == LowBlockLevelMax) {
-			return true;
+		if (Tiles[current].TerrainWalkingBlockLevel == WalkingBlockLevelMax) {
+			if (Tiles[current].TerrainWalkingConnection) {
+				return true;
+			}
+			else {
+				return false;
+			}
+			
 		}
 
 		FStructHexTileNeighbors Neighbors = Tiles[current].Neighbors[0];
@@ -817,7 +940,7 @@ bool AHexGrid::Find_LBLM_By_LBL3(int32 Index)
 			if (!TileIndices.Contains(key)) {
 				continue;
 			}
-			if (!reached.Contains(TileIndices[key]) && Tiles[TileIndices[key]].TerrainLowBlockLevel >=3) {
+			if (!reached.Contains(TileIndices[key]) && Tiles[TileIndices[key]].TerrainWalkingBlockLevel >=3) {
 				frontier.Enqueue(TileIndices[key]);
 				reached.Add(TileIndices[key]);
 			}
@@ -826,47 +949,51 @@ bool AHexGrid::Find_LBLM_By_LBL3(int32 Index)
 	return false;
 }
 
-void AHexGrid::SetTilesPlainLevel()
+void AHexGrid::SetTilesBuildingBlockLevel()
 {
-	TilesLoopFunction([this]() { InitSetTilesPlainLevel(); }, [this](int32 i) { SetTilePlainLevelByNeighbors(i); },
-		SetTilesPlainLevelLoopData, Enum_HexGridWorkflowState::DrawMesh);
-
-	UE_LOG(HexGrid, Log, TEXT("Set tiles plain level done!"));
+	if (TilesLoopFunction([this]() { InitSetTilesBuildingBlockLevel(); }, [this](int32 i) { SetTileBuildingBlockLevelByNeighbors(i); },
+		SetTilesBuildingBlockLevelLoopData, Enum_HexGridWorkflowState::SetTilesBuildingBlockLevelEx)) {
+		UE_LOG(HexGrid, Log, TEXT("Set tiles Building Block level done!"));
+	}
 }
 
-void AHexGrid::InitSetTilesPlainLevel()
+void AHexGrid::InitSetTilesBuildingBlockLevel()
 {
-	PlainLevelMax = NeighborRange + 1;
+	BuildingBlockLevelMax = NeighborRange + 1;
+	BuildingBlockAltitudeRatio = BuildingBlockAltitudeRatio > WalkingBlockAltitudeRatio ? WalkingBlockAltitudeRatio : BuildingBlockAltitudeRatio;
+	BuildingBlockSlopeRatio = BuildingBlockSlopeRatio > WalkingBlockSlopeRatio ? WalkingBlockSlopeRatio : BuildingBlockSlopeRatio;
 }
 
-bool AHexGrid::SetTilePlain(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 PlainLevel)
+bool AHexGrid::SetTileBuildingBlock(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 BuildingBlockLevel)
 {
-	if (CheckData.AvgPositionZ > TerrainAltitudeLowBlockRatio * Terrain->GetTileAltitudeMultiplier()
+	if (FMath::Abs<float>(CheckData.Position2D.X) > Terrain->GetWidth() / 2
+		|| FMath::Abs<float>(CheckData.Position2D.Y) > Terrain->GetHeight() / 2
+		|| CheckData.AvgPositionZ > BuildingBlockAltitudeRatio * Terrain->GetTileAltitudeMultiplier()
 		|| CheckData.AvgPositionZ < Terrain->GetWaterBase()
-		|| CheckData.AngleToUp >(PI * TerrainSlopePlainRatio / 2.0)) {
-		Data.TerrainPlainLevel = PlainLevel;
+		|| CheckData.AngleToUp >(PI * BuildingBlockSlopeRatio / 2.0)) {
+		Data.TerrainBuildingBlockLevel = BuildingBlockLevel;
 		return true;
 	}
 	return false;
 }
 
-void AHexGrid::SetTilePlainLevelByNeighbors(int32 Index)
+void AHexGrid::SetTileBuildingBlockLevelByNeighbors(int32 Index)
 {
 	FStructHexTileData& Data = Tiles[Index];
-	if (SetTilePlain(Data, Data, 0)) {
+	if (SetTileBuildingBlock(Data, Data, 0)) {
 		return;
 	}
 
 	for (int32 i = 0; i < Data.Neighbors.Num(); i++)
 	{
-		SetTilePlainLevelByNeighbor(Data, i);
-		if (Data.TerrainPlainLevel != PlainLevelMax) {
+		if (SetTileBuildingBlockLevelByNeighbor(Data, i)) {
 			return;
 		}
 	}
+	Data.TerrainBuildingBlockLevel = BuildingBlockLevelMax;
 }
 
-void AHexGrid::SetTilePlainLevelByNeighbor(FStructHexTileData& Data, int32 Index)
+bool AHexGrid::SetTileBuildingBlockLevelByNeighbor(FStructHexTileData& Data, int32 Index)
 {
 	FStructHexTileNeighbors Neighbors = Data.Neighbors[Index];
 	int32 TileIndex;
@@ -878,12 +1005,44 @@ void AHexGrid::SetTilePlainLevelByNeighbor(FStructHexTileData& Data, int32 Index
 		}
 
 		TileIndex = TileIndices[key];
-		if (SetTilePlain(Data, Tiles[TileIndex], Neighbors.Radius))
+		if (SetTileBuildingBlock(Data, Tiles[TileIndex], Neighbors.Radius))
 		{
-			return;
+			return true;
 		}
 	}
-	Data.TerrainPlainLevel = PlainLevelMax;
+
+	return false;
+}
+
+void AHexGrid::SetTilesBuildingBlockLevelEx()
+{
+	if (TilesLoopFunction([this]() { InitSetTilesBuildingBlockExLevel(); }, [this](int32 i) { SetTileBuildingBlockLevelByNeighborsEx(i); },
+		SetTilesBuildingBlockLevelExLoopData, Enum_HexGridWorkflowState::DrawMesh)) {
+		UE_LOG(HexGrid, Log, TEXT("Set tiles Building Block level extension done!"));
+	}
+}
+
+void AHexGrid::InitSetTilesBuildingBlockExLevel()
+{
+	BuildingBlockLevelMax = NeighborRange * 2 + 1;
+}
+
+void AHexGrid::SetTileBuildingBlockLevelByNeighborsEx(int32 Index)
+{
+	FStructHexTileData& Data = Tiles[Index];
+	if (Data.TerrainBuildingBlockLevel == (NeighborRange + 1)) {
+		FStructHexTileNeighbors OutSideNeighbors = Data.Neighbors[Data.Neighbors.Num() - 1];
+		int32 BuildingBlockLvMin = BuildingBlockLevelMax;
+		int32 CurrentBuildingBlockLv = Data.TerrainBuildingBlockLevel;
+		for (int32 i = 0; i < OutSideNeighbors.Count; i++)
+		{
+			CurrentBuildingBlockLv = NeighborRange + Tiles[TileIndices[OutSideNeighbors.Tiles[i]]].TerrainBuildingBlockLevel;
+			if (CurrentBuildingBlockLv < BuildingBlockLvMin) {
+				BuildingBlockLvMin = CurrentBuildingBlockLv;
+			}
+		}
+		Data.TerrainBuildingBlockLevel = BuildingBlockLvMin;
+	}
 }
 
 void AHexGrid::AddTilesInstance()
@@ -896,11 +1055,10 @@ void AHexGrid::AddTilesInstance()
 		return;
 	}
 
-	TilesLoopFunction([this]() { InitAddTilesInstance(); }, [this](int32 i) { AddTileInstanceByLowBlock(i); },
-		AddTilesInstanceLoopData, Enum_HexGridWorkflowState::Done);
-
-	UE_LOG(HexGrid, Log, TEXT("Add tiles instance done!"));
-
+	if (TilesLoopFunction([this]() { InitAddTilesInstance(); }, [this](int32 i) { AddTileInstanceByWalkingBlock(i); },
+		AddTilesInstanceLoopData, Enum_HexGridWorkflowState::Done)) {
+		UE_LOG(HexGrid, Log, TEXT("Add tiles instance done!"));
+	}
 }
 
 void AHexGrid::InitAddTilesInstance()
@@ -927,40 +1085,43 @@ int32 AHexGrid::AddTileInstance(FStructHexTileData Data)
 	return InstanceIndex;
 }
 
-void AHexGrid::AddTileInstanceByLowBlock(int32 Index)
+void AHexGrid::AddTileInstanceByWalkingBlock(int32 Index)
 {
 	FStructHexTileData tile = Tiles[Index];
-	if (tile.TerrainLowBlockLevel > 0 && !tile.TerrainIsLand
+	if (tile.TerrainWalkingBlockLevel > 0 
+		&& !tile.TerrainIsLand
 		&& FMath::Abs<float>(tile.Position2D.X) < Terrain->GetWidth() / 2
 		&& FMath::Abs<float>(tile.Position2D.Y) < Terrain->GetHeight() / 2)
 	{
 		int32 InstanceIndex = AddTileInstance(tile);
-		AddTileInstanceDataByLowBlock(Index, InstanceIndex);
+		AddTileInstanceDataByWalkingBlock(Index, InstanceIndex);
 	}
 }
 
-void AHexGrid::AddTileInstanceDataByLowBlock(int32 TileIndex, int32 InstanceIndex)
+void AHexGrid::AddTileInstanceDataByWalkingBlock(int32 TileIndex, int32 InstanceIndex)
 {
 	float H = 0.0;
-	if (!Tiles[TileIndex].TerrainIsLand) {
-		H = 120.0f / float(LowBlockLevelMax) * float(Tiles[TileIndex].TerrainLowBlockLevel);
+	if (GridShowMode == Enum_BlockMode::WalkingBlock) {
+		if (!Tiles[TileIndex].TerrainIsLand) {
+			H = 120.0f / float(WalkingBlockLevelMax) * float(Tiles[TileIndex].TerrainWalkingBlockLevel);
+		}
+		else {
+			H = 240.0;
+		}
 	}
-	else {
-		H = 300.0;
+	else if (GridShowMode == Enum_BlockMode::BuildingBlock) {
+		if (!Tiles[TileIndex].TerrainIsLand) {
+			H = 120.0f / float(BuildingBlockLevelMax) * float(Tiles[TileIndex].TerrainBuildingBlockLevel);
+		}
+		else {
+			H = 240.0;
+		}
 	}
 
-	float S = 0.5 + 0.5 / float(PlainLevelMax) * float(Tiles[TileIndex].TerrainPlainLevel);
-	FLinearColor LinearColor = UKismetMathLibrary::HSVToRGB(H, S, 1.0, 1.0);
+	FLinearColor LinearColor = UKismetMathLibrary::HSVToRGB(H, 1.0, 1.0, 1.0);
 
 	TArray<float> CustomData = { LinearColor.R, LinearColor.G, LinearColor.B };
 	HexInstMesh->SetCustomData(InstanceIndex, CustomData, true);
-}
-
-// Called every frame
-void AHexGrid::Tick(float DeltaTime)
-{
-	//Super::Tick(DeltaTime);
-
 }
 
 void AHexGrid::MouseOverGrid(const FVector2D& MousePos)
@@ -1076,4 +1237,10 @@ void AHexGrid::CreateMouseOverMesh()
 void AHexGrid::SetMouseOverMaterial()
 {
 	MouseOverMesh->SetMaterial(0, MouseOverMaterialIns);
+}
+
+// Called every frame
+void AHexGrid::Tick(float DeltaTime)
+{
+	//Super::Tick(DeltaTime);
 }

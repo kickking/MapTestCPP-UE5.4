@@ -75,16 +75,19 @@ struct FStructHexTileData
 	TArray<FStructHexTileNeighbors> Neighbors;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 TerrainLowBlockLevel;
+	int32 TerrainWalkingBlockLevel;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 TerrainHighBlockLevel;
+	int32 TerrainFlyingBlockLevel;
 
 	UPROPERTY(BlueprintReadOnly)
 	bool TerrainIsLand;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 TerrainPlainLevel;
+	int32 TerrainBuildingBlockLevel;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool TerrainWalkingConnection = true;
 };
 
 USTRUCT(BlueprintType)
