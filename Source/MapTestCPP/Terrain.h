@@ -120,6 +120,13 @@ private:
 
 	//delegate
 	FTimerDynamicDelegate WorkflowDelegate;
+	FTimerDynamicDelegate UpdateMousePosDelegate;
+
+	//Timer handle
+	FTimerHandle UpdateMousePosTimerHandle;
+
+	//Mouse pos
+	FVector MousePos;
 
 	//For normal calculate
 	TArray<FVector> NormalsAcc;
@@ -265,6 +272,8 @@ protected:
 	//Timer
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Timer")
 	float DefaultTimerRate = 0.01f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Timer")
+	float UpdateMousePosTimerRate = 0.01f;
 
 	//Loop BP
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Loop")
@@ -433,6 +442,13 @@ private:
 	//Input
 	bool IsMouseClickTraceHit();
 
+	//Update mouse position
+	void StartUpdateMousePos();
+	void StopUpdateMousePos();
+
+	UFUNCTION()
+	void UpdateMousePosition();
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -471,4 +487,8 @@ public:
 		return WaterBase;
 	}
 	
+	FORCEINLINE FVector GetMousePosition() {
+		return MousePos;
+	}
+
 };

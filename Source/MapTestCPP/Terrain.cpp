@@ -44,7 +44,7 @@ void ATerrain::BeginPlay()
 
 	WorkflowState = Enum_TerrainWorkflowState::InitWorkflow;
 	CreateTerrainFlow();
-
+	StartUpdateMousePos();
 }
 
 // Called every frame
@@ -57,6 +57,7 @@ void ATerrain::Tick(float DeltaTime)
 void ATerrain::BindDelegate()
 {
 	WorkflowDelegate.BindUFunction(Cast<UObject>(this), TEXT("CreateTerrainFlow"));
+	UpdateMousePosDelegate.BindUFunction(Cast<UObject>(this), TEXT("UpdateMousePosition"));
 }
 
 void ATerrain::EnablePlayer()
@@ -100,6 +101,34 @@ bool ATerrain::IsMouseClickTraceHit()
 	return isHit;
 }
 
+void ATerrain::StartUpdateMousePos()
+{
+	GetWorldTimerManager().SetTimer(UpdateMousePosTimerHandle, UpdateMousePosDelegate, UpdateMousePosTimerRate, true);
+	UE_LOG(Terrain, Log, TEXT("Start updating mouse Position!"));
+}
+
+void ATerrain::StopUpdateMousePos()
+{
+	GetWorldTimerManager().ClearTimer(UpdateMousePosTimerHandle);
+	UE_LOG(Terrain, Log, TEXT("Stop updating mouse Position!"));
+}
+
+void ATerrain::UpdateMousePosition()
+{
+	if (IsWorkFlowDone()) {
+		FVector location, direction;
+		Controller->DeprojectMousePositionToWorld(location, direction);
+
+		FHitResult result;
+		FCollisionQueryParams params;
+		bool isHit = TerrainMesh->LineTraceComponent(result, location, HoldTraceLength * direction + location,
+			params);
+		if (isHit) {
+			MousePos.Set(result.Location.X, result.Location.Y, result.Location.Z);
+		}
+	}
+}
+
 void ATerrain::OnLeftHoldStarted(const FInputActionValue& Value)
 {
 	if (IsMouseClickTraceHit()) {
@@ -137,6 +166,8 @@ bool ATerrain::IsRightHold()
 {
 	return RightHold;
 }
+
+
 
 void ATerrain::CreateNoise()
 {
@@ -421,8 +452,8 @@ void ATerrain::CreateVertices()
 	float RatioStd;
 	float Ratio;
 
-	if (!CreateVerticesLoopData.IsInitialized) {
-		CreateVerticesLoopData.IsInitialized = true;
+	if (!CreateVerticesLoopData.HasInitialized) {
+		CreateVerticesLoopData.HasInitialized = true;
 		ProgressTarget = (NumRows + 1) * (NumColumns + 1);
 	}
 
@@ -599,8 +630,8 @@ void ATerrain::CreateTriangles()
 	TArray<int32> Indices = { 0, 0 };
 	bool SaveLoopFlag = false;
 
-	if (!CreateTrianglesLoopData.IsInitialized) {
-		CreateTrianglesLoopData.IsInitialized = true;
+	if (!CreateTrianglesLoopData.HasInitialized) {
+		CreateTrianglesLoopData.HasInitialized = true;
 		ProgressTarget = NumRows * NumColumns;
 	}
 
@@ -679,8 +710,8 @@ void ATerrain::CalNormalsInit()
 	TArray<int32> Indices = { 0 };
 	bool SaveLoopFlag = false;
 
-	if (!CalNormalsInitLoopData.IsInitialized) {
-		CalNormalsInitLoopData.IsInitialized = true;
+	if (!CalNormalsInitLoopData.HasInitialized) {
+		CalNormalsInitLoopData.HasInitialized = true;
 		ProgressTarget = Vertices.Num();
 	}
 
@@ -709,8 +740,8 @@ void ATerrain::CalNormalsAcc()
 	TArray<int32> Indices = { 0 };
 	bool SaveLoopFlag = false;
 
-	if (!CalNormalsAccLoopData.IsInitialized) {
-		CalNormalsAccLoopData.IsInitialized = true;
+	if (!CalNormalsAccLoopData.HasInitialized) {
+		CalNormalsAccLoopData.HasInitialized = true;
 		ProgressTarget = Triangles.Num() / 3;
 	}
 
@@ -759,8 +790,8 @@ void ATerrain::NormalizeNormals()
 	TArray<int32> Indices = { 0 };
 	bool SaveLoopFlag = false;
 
-	if (!NormalizeNormalsLoopData.IsInitialized) {
-		NormalizeNormalsLoopData.IsInitialized = true;
+	if (!NormalizeNormalsLoopData.HasInitialized) {
+		NormalizeNormalsLoopData.HasInitialized = true;
 		ProgressTarget = NormalsAcc.Num();
 	}
 

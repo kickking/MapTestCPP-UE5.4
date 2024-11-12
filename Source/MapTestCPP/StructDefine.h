@@ -20,7 +20,7 @@ struct FStructLoopData
 	TArray<int32> IndexSaved = {};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
-	bool IsInitialized = false;
+	bool HasInitialized = false;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, meta = (ClampMin = "0"))
 	int32 Count = 0;

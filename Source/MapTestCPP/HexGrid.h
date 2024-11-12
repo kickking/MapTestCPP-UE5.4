@@ -60,10 +60,14 @@ private:
 	FString PipeDelim = FString(TEXT("|"));
 	FString CommaDelim = FString(TEXT(","));
 	FString SpaceDelim = FString(TEXT(" "));
-	FString ColonDelim = FString(TEXT(":"));
+	//FString ColonDelim = FString(TEXT(":"));
 
 	//Delegate
 	FTimerDynamicDelegate WorkflowDelegate;
+	FTimerDynamicDelegate CheckMouseOverDelegate;
+
+	//Timer handle
+	FTimerHandle CheckTimerHandle;
 
 	//ifstream for data load
 	std::ifstream DataLoadStream;
@@ -83,7 +87,7 @@ private:
 
 	//Hex ISM mesh
 	float HexInstanceScale = 1.0;
-	FVector HexInstMeshUpVec;
+	FVector HexInstMeshUpVec = FVector(0.f, 0.f, 1.0);
 
 	//BuildingBlock data
 	int32 BuildingBlockLevelMax = 0;
@@ -93,12 +97,14 @@ private:
 	TArray<TSet<int32>> MaxWalkingBlockTileChunks;
 	TQueue<int32> CheckWalkingConnectionFrontier;
 
+	APlayerController* Controller;
+
 protected:
 	//Mesh
 	UPROPERTY(VisibleAnywhere, Category = "Custom|HexInstMesh")
 	class UInstancedStaticMeshComponent* HexInstMesh;
-	UPROPERTY(BlueprintReadOnly)
-	class UProceduralMeshComponent* MouseOverMesh;
+	UPROPERTY(VisibleAnywhere, Category = "Custom|HexInstMesh")
+	class UInstancedStaticMeshComponent* MouseOverInstMesh;
 
 	//Material
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Material")
@@ -107,6 +113,8 @@ protected:
 	//Timer
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Timer")
 	float DefaultTimerRate = 0.01f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Timer")
+	float CheckTimerRate = 0.02f;
 
 	//Path
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Path")
@@ -161,11 +169,6 @@ protected:
 	UPROPERTY(BlueprintReadOnly)
 	Enum_HexGridWorkflowState WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
 
-	//Progress
-	/*UPROPERTY(BlueprintReadOnly)
-	int32 ProgressTarget = 0;
-	UPROPERTY(BlueprintReadOnly)
-	int32 ProgressCurrent = 0;*/
 
 	//common
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Common")
@@ -199,6 +202,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|MouseOver", meta = (ClampMin = "0"))
 	int32 MouseOverShowRadius = 1;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|MouseOver")
+	float MouseOverInstMeshOffsetZ = 2.0;
+
 	//Block
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block|Walking", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float WalkingBlockAltitudeRatio = 0.3;
@@ -210,6 +216,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Block|Building", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float BuildingBlockSlopeRatio = 0.1;
 
+	//Input
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
+	class UInputAction* IncMouseOverRadiusAction;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
+	class UInputAction* DecMouseOverRadiusAction;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
+	float TraceLength = 1000000;
+
 public:	
 	// Sets default values for this actor's properties
 	AHexGrid();
@@ -219,9 +233,21 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
-
 	//Timer delegate
 	void BindDelegate();
+
+	//Input
+	void EnablePlayer();
+	void BindEnchancedInputAction();
+	void OnIncMouseOverRadius();
+	void OnDecMouseOverRadius();
+
+	/*void OnMouseOver();*/
+	void StartCheckMouseOver();
+	void StopCheckMouseOver();
+
+	UFUNCTION()
+	void CheckMouseOver();
 
 	//Create Workflow
 	UFUNCTION()
@@ -329,18 +355,14 @@ private:
 	//Add Grid tiles ISM
 	void AddTilesInstance();
 	void InitAddTilesInstance();
-	int32 AddTileInstance(FStructHexTileData Data);
+	int32 AddTileInstance(int32 Index);
+	int32 AddISM(int32 Index, UInstancedStaticMeshComponent* ISM, float ZOffset = 0.f);
 
 	void AddTileInstanceByWalkingBlock(int32 Index);
 	void AddTileInstanceDataByWalkingBlock(int32 TileIndex, int32 InstanceIndex);
 
-	//Mouse over
-	Hex PosToHex(const FVector2D& Point, float Size);
-	void SetMouseOverVertices();
-	void SetHexVerticesByIndex(int32 Index);
-	void SetMouseOverTriangles();
-	void CreateMouseOverMesh();
-	void SetMouseOverMaterial();
+	bool IsInMapRange(int32 Index);
+	bool IsInMapRange(const FStructHexTileData& Tile);
 
 public:	
 	// Called every frame
@@ -355,5 +377,11 @@ public:
 	{
 		return WorkflowState == Enum_HexGridWorkflowState::Done;
 	}
+
+private:
+	//Mouse over
+	Hex PosToHex(const FVector2D& Point, float Size);
+	void AddMouseOverTilesInstance();
+	void RemoveMouseOverTilesInstance();
 
 };

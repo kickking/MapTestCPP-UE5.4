@@ -12,7 +12,7 @@
 #include <ProceduralMeshComponent.h>
 #include <Components/InstancedStaticMeshComponent.h>
 #include <TimerManager.h>
-
+#include <EnhancedInputComponent.h>
 #include <string>
 
 DEFINE_LOG_CATEGORY(HexGrid);
@@ -26,11 +26,14 @@ AHexGrid::AHexGrid()
 
 	HexInstMesh = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("HexInstMesh"));
 	this->SetRootComponent(HexInstMesh);
+	HexInstMesh->SetMobility(EComponentMobility::Static);
 	HexInstMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	MouseOverMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("MouseOverMesh"));
-	MouseOverMesh->SetupAttachment(RootComponent);
-	MouseOverMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MouseOverInstMesh = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("MouseOverInstMesh"));
+	MouseOverInstMesh->SetupAttachment(RootComponent);
+	MouseOverInstMesh->SetMobility(EComponentMobility::Static);
+	MouseOverInstMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
 	BindDelegate();
 }
 
@@ -38,14 +41,84 @@ AHexGrid::AHexGrid()
 void AHexGrid::BeginPlay()
 {
 	Super::BeginPlay();
+	EnablePlayer();
+	BindEnchancedInputAction();
 
 	WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
 	CreateHexGridFlow();
+	StartCheckMouseOver();
 }
 
 void AHexGrid::BindDelegate()
 {
 	WorkflowDelegate.BindUFunction(Cast<UObject>(this), TEXT("CreateHexGridFlow"));
+	CheckMouseOverDelegate.BindUFunction(Cast<UObject>(this), TEXT("CheckMouseOver"));
+}
+
+void AHexGrid::EnablePlayer()
+{
+	APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	if (PlayerController) {
+		EnableInput(PlayerController);
+		Controller = PlayerController;
+	}
+}
+
+void AHexGrid::BindEnchancedInputAction()
+{
+	if (InputComponent) {
+		if (IncMouseOverRadiusAction != nullptr 
+			&& DecMouseOverRadiusAction != nullptr) {
+			UEnhancedInputComponent* EnhancedInputComp = Cast<UEnhancedInputComponent>(InputComponent);
+			EnhancedInputComp->BindAction(IncMouseOverRadiusAction, ETriggerEvent::Triggered, this,
+				&AHexGrid::OnIncMouseOverRadius);
+			EnhancedInputComp->BindAction(DecMouseOverRadiusAction, ETriggerEvent::Triggered, this,
+				&AHexGrid::OnDecMouseOverRadius);
+		}
+		else {
+			UE_LOG(HexGrid, Error, TEXT("No setting Input Action."));
+		}
+	}
+}
+
+void AHexGrid::OnIncMouseOverRadius()
+{
+	if (IsWorkFlowDone()) {
+		int32 max = NeighborRange;
+		int value = MouseOverShowRadius + 1;
+		value = value < max ? value : max;
+		MouseOverShowRadius = value;
+	}
+}
+
+void AHexGrid::OnDecMouseOverRadius()
+{
+	if (IsWorkFlowDone()) {
+		int32 min = 0;
+		int value = MouseOverShowRadius - 1;
+		value = value > min ? value : min;
+		MouseOverShowRadius = value;
+	}
+}
+
+void AHexGrid::StartCheckMouseOver()
+{
+	GetWorldTimerManager().SetTimer(CheckTimerHandle, CheckMouseOverDelegate, CheckTimerRate, true);
+	UE_LOG(HexGrid, Log, TEXT("Start checking mouse over hex grid!"));
+}
+
+void AHexGrid::StopCheckMouseOver()
+{
+	GetWorldTimerManager().ClearTimer(CheckTimerHandle);
+	UE_LOG(HexGrid, Log, TEXT("Stop checking mouse over hex grid!"));
+}
+
+void AHexGrid::CheckMouseOver()
+{
+	if (IsWorkFlowDone()) {
+		FVector MousePos = Terrain->GetMousePosition();
+		MouseOverGrid(FVector2D(MousePos.X, MousePos.Y));
+	}
 }
 
 void AHexGrid::CreateHexGridFlow()
@@ -220,8 +293,8 @@ void AHexGrid::LoadTileIndicesFromFile()
 		return;
 	}
 
-	if (!LoadTileIndicesLoopData.IsInitialized) {
-		LoadTileIndicesLoopData.IsInitialized = true;
+	if (!LoadTileIndicesLoopData.HasInitialized) {
+		LoadTileIndicesLoopData.HasInitialized = true;
 		DataLoadStream.open(*FullPath, std::ios::in);
 	}
 
@@ -284,8 +357,8 @@ void AHexGrid::LoadTilesFromFile()
 		return;
 	}
 
-	if (!LoadTilesLoopData.IsInitialized) {
-		LoadTilesLoopData.IsInitialized = true;
+	if (!LoadTilesLoopData.HasInitialized) {
+		LoadTilesLoopData.HasInitialized = true;
 		DataLoadStream.open(*FullPath, std::ios::in);
 	}
 
@@ -372,8 +445,8 @@ void AHexGrid::LoadNeighborsFromFile()
 			return;
 		}
 
-		if (!LoadNeighborsLoopData.IsInitialized) {
-			LoadNeighborsLoopData.IsInitialized = true;
+		if (!LoadNeighborsLoopData.HasInitialized) {
+			LoadNeighborsLoopData.HasInitialized = true;
 			DataLoadStream.open(*FullPath, std::ios::in);
 		}
 
@@ -488,7 +561,8 @@ bool AHexGrid::TilesLoopFunction(TFunction<void()> InitFunc, TFunction<void(int3
 	TArray<int32> Indices = { 0 };
 	bool SaveLoopFlag = false;
 
-	if (InitFunc) {
+	if (InitFunc && !LoopData.HasInitialized) {
+		LoopData.HasInitialized = true;
 		InitFunc();
 	}
 
@@ -633,8 +707,7 @@ void AHexGrid::InitSetTilesWalkingBlockLevel()
 
 bool AHexGrid::SetTileWalkingBlock(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 BlockLevel)
 {
-	if (FMath::Abs<float>(CheckData.Position2D.X) > Terrain->GetWidth() / 2 
-		|| FMath::Abs<float>(CheckData.Position2D.Y) > Terrain->GetHeight() / 2 
+	if (!IsInMapRange(CheckData) 
 		|| CheckData.AvgPositionZ > WalkingBlockAltitudeRatio * Terrain->GetTileAltitudeMultiplier()
 		|| CheckData.AvgPositionZ < Terrain->GetWaterBase()
 		|| CheckData.AngleToUp > (PI * WalkingBlockSlopeRatio / 2.0)) {
@@ -966,8 +1039,7 @@ void AHexGrid::InitSetTilesBuildingBlockLevel()
 
 bool AHexGrid::SetTileBuildingBlock(FStructHexTileData& Data, FStructHexTileData& CheckData, int32 BuildingBlockLevel)
 {
-	if (FMath::Abs<float>(CheckData.Position2D.X) > Terrain->GetWidth() / 2
-		|| FMath::Abs<float>(CheckData.Position2D.Y) > Terrain->GetHeight() / 2
+	if (!IsInMapRange(CheckData) 
 		|| CheckData.AvgPositionZ > BuildingBlockAltitudeRatio * Terrain->GetTileAltitudeMultiplier()
 		|| CheckData.AvgPositionZ < Terrain->GetWaterBase()
 		|| CheckData.AngleToUp >(PI * BuildingBlockSlopeRatio / 2.0)) {
@@ -1048,6 +1120,7 @@ void AHexGrid::SetTileBuildingBlockLevelByNeighborsEx(int32 Index)
 void AHexGrid::AddTilesInstance()
 {
 	if (!bShowGrid) {
+		InitAddTilesInstance();
 		FTimerHandle TimerHandle;
 		WorkflowState = Enum_HexGridWorkflowState::Done;
 		GetWorldTimerManager().SetTimer(TimerHandle, WorkflowDelegate, DefaultTimerRate, false);
@@ -1067,10 +1140,19 @@ void AHexGrid::InitAddTilesInstance()
 	HexInstanceScale = TileSize / HexInstMeshSize;
 }
 
-int32 AHexGrid::AddTileInstance(FStructHexTileData Data)
+int32 AHexGrid::AddTileInstance(int32 Index)
 {
-	FStructHexTileData tile = Data;
-	FVector HexLoc(tile.Position2D.X, tile.Position2D.Y, tile.AvgPositionZ + HexInstMeshOffsetZ);
+	return AddISM(Index, HexInstMesh, HexInstMeshOffsetZ);
+}
+
+int32 AHexGrid::AddISM(int32 Index, UInstancedStaticMeshComponent* ISM, float ZOffset)
+{
+	if (ISM == nullptr) {
+		return -1;
+	}
+
+	FStructHexTileData tile = Tiles[Index];
+	FVector HexLoc(tile.Position2D.X, tile.Position2D.Y, tile.AvgPositionZ + ZOffset);
 	FVector HexScale(HexInstanceScale);
 
 	FVector RotationAxis = FVector::CrossProduct(HexInstMeshUpVec, tile.Normal);
@@ -1081,7 +1163,7 @@ int32 AHexGrid::AddTileInstance(FStructHexTileData Data)
 
 	FTransform HexTransform(NewQuat.Rotator(), HexLoc, HexScale);
 
-	int32 InstanceIndex = HexInstMesh->AddInstance(HexTransform);
+	int32 InstanceIndex = ISM->AddInstance(HexTransform);
 	return InstanceIndex;
 }
 
@@ -1090,11 +1172,12 @@ void AHexGrid::AddTileInstanceByWalkingBlock(int32 Index)
 	FStructHexTileData tile = Tiles[Index];
 	if (tile.TerrainWalkingBlockLevel > 0 
 		&& !tile.TerrainIsLand
-		&& FMath::Abs<float>(tile.Position2D.X) < Terrain->GetWidth() / 2
-		&& FMath::Abs<float>(tile.Position2D.Y) < Terrain->GetHeight() / 2)
+		&& IsInMapRange(Index))
 	{
-		int32 InstanceIndex = AddTileInstance(tile);
-		AddTileInstanceDataByWalkingBlock(Index, InstanceIndex);
+		int32 InstanceIndex = AddTileInstance(Index);
+		if (InstanceIndex >= 0) {
+			AddTileInstanceDataByWalkingBlock(Index, InstanceIndex);
+		}
 	}
 }
 
@@ -1124,6 +1207,23 @@ void AHexGrid::AddTileInstanceDataByWalkingBlock(int32 TileIndex, int32 Instance
 	HexInstMesh->SetCustomData(InstanceIndex, CustomData, true);
 }
 
+bool AHexGrid::IsInMapRange(int32 Index)
+{
+	return IsInMapRange(Tiles[Index]);
+}
+
+bool AHexGrid::IsInMapRange(const FStructHexTileData& Tile)
+{
+	return (FMath::Abs<float>(Tile.Position2D.X) < Terrain->GetWidth() / 2
+		&& FMath::Abs<float>(Tile.Position2D.Y) < Terrain->GetHeight() / 2);
+}
+
+// Called every frame
+void AHexGrid::Tick(float DeltaTime)
+{
+	//Super::Tick(DeltaTime);
+}
+
 void AHexGrid::MouseOverGrid(const FVector2D& MousePos)
 {
 	if (!IsWorkFlowDone() || Terrain == nullptr || !Terrain->IsWorkFlowDone()) {
@@ -1131,16 +1231,9 @@ void AHexGrid::MouseOverGrid(const FVector2D& MousePos)
 	}
 
 	Hex hex = Hex::PosToHex(MousePos, TileSize);
-	if (MouseOverHex == hex) {
-		return;
-	}
-
 	MouseOverHex.SetHex(hex);
-	SetMouseOverVertices();
-	SetMouseOverTriangles();
-	CreateMouseOverMesh();
-	SetMouseOverMaterial();
-
+	RemoveMouseOverTilesInstance();
+	AddMouseOverTilesInstance();
 }
 
 Hex AHexGrid::PosToHex(const FVector2D& Point, float Size)
@@ -1189,58 +1282,24 @@ Hex AHexGrid::PosToHex(const FVector2D& Point, float Size)
 	return OutHex;
 }
 
-void AHexGrid::SetMouseOverVertices()
+void AHexGrid::AddMouseOverTilesInstance()
 {
-	MouseOverVertices.Empty();
-	int32 index = TileIndices[MouseOverHex.ToIntPoint()];
-	FStructHexTileData Tile = Tiles[index];
-	SetHexVerticesByIndex(index);
+	int32 Index = TileIndices[MouseOverHex.ToIntPoint()];
+	int32 InstanceIndex = AddISM(Index, MouseOverInstMesh, MouseOverInstMeshOffsetZ);
 
 	MouseOverShowRadius = MouseOverShowRadius < NeighborRange ? MouseOverShowRadius : NeighborRange;
 	for (int32 i = 0; i < MouseOverShowRadius; i++)
 	{
-		TArray<FIntPoint> RingTiles = Tile.Neighbors[i].Tiles;
+		TArray<FIntPoint> RingTiles = Tiles[Index].Neighbors[i].Tiles;
 		for (int32 j = 0; j < RingTiles.Num(); j++)
 		{
-			SetHexVerticesByIndex(TileIndices[RingTiles[j]]);
+			InstanceIndex = AddISM(TileIndices[RingTiles[j]], MouseOverInstMesh, MouseOverInstMeshOffsetZ);
 		}
 	}
 }
 
-void AHexGrid::SetHexVerticesByIndex(int32 Index)
+void AHexGrid::RemoveMouseOverTilesInstance()
 {
-	for (int32 i = 0; i < 6; i++)
-	{
-		//MouseOverVertices.Add(GridVertices[Index * 12 + i * 2]);
-	}
+	MouseOverInstMesh->ClearInstances();
 }
 
-void AHexGrid::SetMouseOverTriangles()
-{
-	MouseOverTriangles.Empty();
-	for (int32 i = 0; i < MouseOverVertices.Num(); i += 6)
-	{
-		for (int32 j = 0; j < 4; j++)
-		{
-			MouseOverTriangles.Add(i);
-			MouseOverTriangles.Add(i + j + 2);
-			MouseOverTriangles.Add(i + j + 1);
-		}
-	}
-}
-
-void AHexGrid::CreateMouseOverMesh()
-{
-	MouseOverMesh->CreateMeshSection(0, MouseOverVertices, MouseOverTriangles, TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
-}
-
-void AHexGrid::SetMouseOverMaterial()
-{
-	MouseOverMesh->SetMaterial(0, MouseOverMaterialIns);
-}
-
-// Called every frame
-void AHexGrid::Tick(float DeltaTime)
-{
-	//Super::Tick(DeltaTime);
-}

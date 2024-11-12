@@ -23,7 +23,7 @@ void FlowControlUtility::InitLoopData(FStructLoopData& InOut_Data)
 	{
 		InOut_Data.IndexSaved.Add(0);
 	}
-	InOut_Data.IsInitialized = false;
+	InOut_Data.HasInitialized = false;
 	InOut_Data.Count = 0;
 }
 
