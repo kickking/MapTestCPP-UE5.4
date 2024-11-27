@@ -334,12 +334,12 @@ protected:
 	class AHexGrid* HexGrid;
 	
 	//Input
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Input")
+	class UInputMappingContext* InputMapping;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
 	class UInputAction* MouseLeftHoldAction;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
 	class UInputAction* MouseRightHoldAction;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
 	float HoldTraceLength = 1000000;
 
@@ -361,6 +361,7 @@ private:
 
 	//Input
 	void EnablePlayer();
+	void AddInputMappingContext();
 	void BindEnchancedInputAction();
 
 	UFUNCTION()

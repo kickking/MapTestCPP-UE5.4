@@ -12,6 +12,7 @@
 #include <TimerManager.h>
 #include <ProceduralMeshComponent.h>
 #include <EnhancedInputComponent.h>
+#include <EnhancedInputSubsystems.h>
 
 DEFINE_LOG_CATEGORY(Terrain);
 
@@ -40,6 +41,7 @@ void ATerrain::BeginPlay()
 {
 	Super::BeginPlay();
 	EnablePlayer();
+	AddInputMappingContext();
 	BindEnchancedInputAction();
 
 	WorkflowState = Enum_TerrainWorkflowState::InitWorkflow;
@@ -85,6 +87,23 @@ void ATerrain::BindEnchancedInputAction()
 		}
 		else {
 			UE_LOG(Terrain, Error, TEXT("No setting Input Action."));
+		}
+	}
+}
+
+void ATerrain::AddInputMappingContext()
+{
+	if (Controller) {
+		if (ULocalPlayer* LocalPlayer = Controller->GetLocalPlayer()) {
+			if (UEnhancedInputLocalPlayerSubsystem* InputSystem =
+				LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>()) {
+				if (InputMapping != nullptr) {
+					InputSystem->AddMappingContext(InputMapping, 0);
+				}
+				else {
+					UE_LOG(Terrain, Error, TEXT("No setting Input Mapping Context."));
+				}
+			}
 		}
 	}
 }

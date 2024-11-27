@@ -217,6 +217,8 @@ protected:
 	float BuildingBlockSlopeRatio = 0.1;
 
 	//Input
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Custom|Input")
+	class UInputMappingContext* InputMapping;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
 	class UInputAction* IncMouseOverRadiusAction;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Custom|Input")
@@ -238,6 +240,7 @@ private:
 
 	//Input
 	void EnablePlayer();
+	void AddInputMappingContext();
 	void BindEnchancedInputAction();
 	void OnIncMouseOverRadius();
 	void OnDecMouseOverRadius();

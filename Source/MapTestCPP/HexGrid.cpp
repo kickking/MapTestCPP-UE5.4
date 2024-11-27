@@ -13,6 +13,7 @@
 #include <Components/InstancedStaticMeshComponent.h>
 #include <TimerManager.h>
 #include <EnhancedInputComponent.h>
+#include <EnhancedInputSubsystems.h>
 #include <string>
 
 DEFINE_LOG_CATEGORY(HexGrid);
@@ -42,6 +43,7 @@ void AHexGrid::BeginPlay()
 {
 	Super::BeginPlay();
 	EnablePlayer();
+	AddInputMappingContext();
 	BindEnchancedInputAction();
 
 	WorkflowState = Enum_HexGridWorkflowState::InitWorkflow;
@@ -61,6 +63,23 @@ void AHexGrid::EnablePlayer()
 	if (PlayerController) {
 		EnableInput(PlayerController);
 		Controller = PlayerController;
+	}
+}
+
+void AHexGrid::AddInputMappingContext()
+{
+	if (Controller) {
+		if (ULocalPlayer* LocalPlayer = Controller->GetLocalPlayer()) {
+			if (UEnhancedInputLocalPlayerSubsystem* InputSystem =
+				LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>()) {
+				if (InputMapping != nullptr) {
+					InputSystem->AddMappingContext(InputMapping, 0);
+				}
+				else {
+					UE_LOG(HexGrid, Error, TEXT("No setting Input Mapping Context."));
+				}
+			}
+		}
 	}
 }
 
